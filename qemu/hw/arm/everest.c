@@ -247,7 +247,6 @@ static void everest_init(MachineState *machine)
 		if (machine->audiodev) {
 			qdev_prop_set_string(ssi, "audiodev", machine->audiodev);
 		}
-		object_property_set_link(OBJECT(ssi), "codec", OBJECT(pmic), &error_fatal);
 		sysbus_realize_and_unref(SYS_BUS_DEVICE(ssi), &error_fatal);
 		sysbus_mmio_map(SYS_BUS_DEVICE(ssi), 0, everest_ssi[i].addr);
 		sysbus_connect_irq(SYS_BUS_DEVICE(ssi), 0, qdev_get_gpio_in(sdma, everest_ssi[i].tx_dma_event));

@@ -2,9 +2,9 @@
  * i.MX31 Synchronous Serial Interface, transmit path only.
  *
  * Samples that the guest puts in transmit FIFO 0 go to the host audio
- * backend. The codec supplies the bit clock on this board, so the sample rate
- * comes from the linked codec device. Receive, FIFO 1 and AC97 are not
- * modelled.
+ * backend. The codec supplies the bit clock on this board. The sample rate is
+ * fixed at the rate that the Apex wave driver runs the codec at. Receive,
+ * FIFO 1 and AC97 are not modelled.
  *
  * This work is licensed under the terms of the GNU GPL, version 2 or later.
  * See the COPYING file in the top-level directory.
@@ -28,7 +28,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(IMX31SSIState, IMX31_SSI)
 #define SSI_FIFO_SIZE 8
 #define SSI_OUTPUT_CHANNELS 2
 #define SSI_MAX_FRAMES_PER_CALLBACK 1024
-#define SSI_DEFAULT_SAMPLE_RATE 44100
+#define SSI_SAMPLE_RATE 44100
 
 #define SSI_STX0 0x00
 #define SSI_SCR 0x10
@@ -57,13 +57,11 @@ struct IMX31SSIState {
 	qemu_irq tx_dma_request;
 	AudioBackend *audio_be;
 	SWVoiceOut *voice;
-	DeviceState *codec;
 
 	uint32_t regs[SSI_NUM_REGS];
 	uint16_t fifo[SSI_FIFO_SIZE];
 	uint32_t fifo_head;
 	uint32_t fifo_count;
-	uint32_t sample_rate;
 	bool active;
 };
 
@@ -148,21 +146,16 @@ static void imx31_ssi_audio_callback(void *opaque, int avail)
 
 static void imx31_ssi_open_voice(IMX31SSIState *s)
 {
-	uint32_t rate = SSI_DEFAULT_SAMPLE_RATE;
 	struct audsettings settings = {
+		.freq = SSI_SAMPLE_RATE,
 		.nchannels = SSI_OUTPUT_CHANNELS,
 		.fmt = AUDIO_FORMAT_S16,
 		.big_endian = false,
 	};
 
-	if (s->codec) {
-		rate = object_property_get_uint(OBJECT(s->codec), "sample-rate", &error_abort);
-	}
-	if (s->voice && rate == s->sample_rate) {
+	if (s->voice) {
 		return;
 	}
-	s->sample_rate = rate;
-	settings.freq = rate;
 	s->voice = audio_be_open_out(s->audio_be, s->voice, TYPE_IMX31_SSI, s,
 			imx31_ssi_audio_callback, &settings);
 }
@@ -249,7 +242,6 @@ static void imx31_ssi_realize(DeviceState *dev, Error **errp)
 
 static const Property imx31_ssi_properties[] = {
 	DEFINE_AUDIO_PROPERTIES(IMX31SSIState, audio_be),
-	DEFINE_PROP_LINK("codec", IMX31SSIState, codec, TYPE_DEVICE, DeviceState *),
 };
 
 static void imx31_ssi_class_init(ObjectClass *klass, const void *data)
