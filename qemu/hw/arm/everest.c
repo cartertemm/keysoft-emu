@@ -1,0 +1,216 @@
+/*
+ * HumanWare BrailleNote Apex ("Everest") board
+ *
+ * This work is licensed under the terms of the GNU GPL, version 2 or later.
+ * See the COPYING file in the top-level directory.
+ */
+
+#include "qemu/osdep.h"
+#include "qapi/error.h"
+#include "hw/arm/fsl-imx31.h"
+#include "hw/arm/boot.h"
+#include "hw/arm/machines-qom.h"
+#include "hw/core/boards.h"
+#include "hw/core/loader.h"
+#include "hw/core/qdev-properties-system.h"
+#include "hw/core/sysbus.h"
+#include "hw/misc/unimp.h"
+#include "hw/ssi/ssi.h"
+#include "hw/usb/chipidea.h"
+#include "qemu/units.h"
+#include "system/address-spaces.h"
+#include "system/block-backend.h"
+#include "system/blockdev.h"
+#include "system/qtest.h"
+
+#define EVEREST_RAM_SIZE (256 * MiB)
+
+#define EVEREST_CSPI_COUNT 3
+#define EVEREST_PMIC_CSPI 1
+#define EVEREST_PMIC_CS 1
+
+#define EVEREST_IOMUXC_ADDR 0x43fac000
+#define EVEREST_IOMUXC_SIZE 0x4000
+#define EVEREST_SDMA_ADDR 0x53fd4000
+#define EVEREST_SDMA_IRQ 34
+#define EVEREST_RTC_ADDR 0x53fd8000
+#define EVEREST_RTC_IRQ 25
+#define EVEREST_NAND_ADDR (FSL_IMX31_FLASH1_ADDR + 0x400)
+#define EVEREST_NAND_SPACING 0x100
+#define EVEREST_NAND_COUNT 4
+#define EVEREST_USB_ADDR 0x43f88000
+#define EVEREST_USB_HOST_COUNT 2
+#define EVEREST_USB_HOST_PRIORITY 1
+
+/*
+ * State that the boot loader (eboot) leaves for the kernel. The board provides
+ * it until eboot itself can run.
+ */
+#define EVEREST_BOOT_STUB_ADDR 0x80010000
+#define EVEREST_KERNEL_ENTRY 0x80200000
+#define EVEREST_BOOT_ARGS_MEMORY_SIZE_ADDR 0x80002094
+
+#define EVEREST_HARP_CFG_ADDR 0x80000094
+#define EVEREST_HARP_CFG_SIZE 0x800
+#define EVEREST_HARP_CFG_SERIAL_OFFSET 0x18
+#define EVEREST_NAND_PRIVATE_MB 20
+#define EVEREST_NAND_BINFS_MB 128
+#define EVEREST_NAND_OS1_MB 40
+#define EVEREST_NAND_OS2_REST_OF_CHIP 0xffffffff
+#define EVEREST_NAND_LICENSES_MB 16
+
+typedef struct EverestCfgField {
+	uint16_t offset;
+	uint8_t size;
+	uint32_t value;
+} EverestCfgField;
+
+/* The factory default configuration that the boot loader creates. */
+static const char everest_harp_cfg_serial[] = "999999999";
+static const EverestCfgField everest_harp_cfg[] = {
+	{ 0x00, 4, 0x4d583331 },
+	{ 0x05, 1, 4 },
+	{ 0x06, 2, 0x0500 }, { 0x08, 2, 0xc35d }, { 0x0a, 2, 0x213c },
+	{ 0x0c, 4, 0x48554d41 }, { 0x10, 4, 0x43453630 }, { 0x14, 4, 0x45564552 },
+	{ 0x22, 1, 0xff }, { 0x23, 1, 0xff },
+	{ 0x2c, 4, EVEREST_NAND_PRIVATE_MB },
+	{ 0x30, 4, EVEREST_NAND_BINFS_MB },
+	{ 0x34, 4, EVEREST_NAND_OS1_MB },
+	{ 0x38, 4, EVEREST_NAND_OS2_REST_OF_CHIP },
+	{ 0x3c, 4, 0x04000000 },
+	{ 0x49, 1, 1 },
+	{ 0x4c, 2, 0x0500 }, { 0x4e, 2, 0xc45d }, { 0x50, 2, 0x213c },
+	{ 0x52, 2, 0x0500 }, { 0x54, 2, 0xc55d }, { 0x56, 2, 0x213c },
+	{ 0x58, 2, 0x0500 }, { 0x5a, 2, 0xc75d }, { 0x5c, 2, 0x213c },
+	{ 0x5e, 1, 1 }, { 0x5f, 1, 2 },
+	{ 0x60, 4, 0x20090101 },
+	{ 0x76, 1, 2 },
+	{ 0x7c, 4, EVEREST_NAND_LICENSES_MB },
+};
+
+static const uint32_t everest_boot_stub[] = {
+	0xe3a0060f, /* mov r0, #0x00f00000 */
+	0xee010f50, /* mcr p15, 0, r0, c1, c0, 2 (enable VFP coprocessor access) */
+	0xe51ff004, /* ldr pc, [pc, #-4] */
+	EVEREST_KERNEL_ENTRY,
+};
+
+typedef struct EverestState {
+	FslIMX31State soc;
+	DeviceState *cspi[EVEREST_CSPI_COUNT];
+	MemoryRegion iomuxc;
+} EverestState;
+
+static const struct {
+	hwaddr addr;
+	int irq;
+} everest_cspi[EVEREST_CSPI_COUNT] = {
+	{ 0x43fa4000, 14 },
+	{ 0x50010000, 13 },
+	{ 0x53f84000, 17 },
+};
+
+static const struct {
+	hwaddr addr;
+	int irq;
+} everest_usb_host[EVEREST_USB_HOST_COUNT] = {
+	{ 0x43f88200, 35 },
+	{ 0x43f88400, 36 },
+};
+
+static struct arm_boot_info everest_binfo = {
+	.loader_start = FSL_IMX31_SDRAM0_ADDR,
+};
+
+static DeviceState *everest_create_device(EverestState *s, const char *type, hwaddr addr, int irq)
+{
+	DeviceState *dev = qdev_new(type);
+
+	sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+	sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, addr);
+	sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, qdev_get_gpio_in(DEVICE(&s->soc.avic), irq));
+	return dev;
+}
+
+static void everest_init(MachineState *machine)
+{
+	EverestState *s = g_new0(EverestState, 1);
+	DeviceState *pmic;
+	DeviceState *nand;
+	DeviceState *usb;
+	DriveInfo *nand_drive;
+	uint32_t boot_stub[ARRAY_SIZE(everest_boot_stub)];
+	uint8_t harp_cfg[EVEREST_HARP_CFG_SIZE] = { 0 };
+	uint32_t memory_size = cpu_to_le32(machine->ram_size);
+	int i;
+
+	object_initialize_child(OBJECT(machine), "soc", &s->soc, TYPE_FSL_IMX31);
+	qdev_realize(DEVICE(&s->soc), NULL, &error_fatal);
+
+	memory_region_add_subregion(get_system_memory(), FSL_IMX31_SDRAM0_ADDR, machine->ram);
+
+	create_unimplemented_device("everest.unmapped", 0, 4 * GiB);
+
+	for (i = 0; i < EVEREST_CSPI_COUNT; i++) {
+		s->cspi[i] = everest_create_device(s, "imx31.cspi", everest_cspi[i].addr, everest_cspi[i].irq);
+	}
+	everest_create_device(s, "imx31.sdma", EVEREST_SDMA_ADDR, EVEREST_SDMA_IRQ);
+	everest_create_device(s, "imx31.rtc", EVEREST_RTC_ADDR, EVEREST_RTC_IRQ);
+
+	for (i = 0; i < EVEREST_NAND_COUNT; i++) {
+		nand = qdev_new("everest.nand");
+		nand_drive = drive_get(IF_MTD, 0, i);
+		if (nand_drive) {
+			qdev_prop_set_drive_err(nand, "drive", blk_by_legacy_dinfo(nand_drive), &error_fatal);
+		}
+		sysbus_realize_and_unref(SYS_BUS_DEVICE(nand), &error_fatal);
+		sysbus_mmio_map(SYS_BUS_DEVICE(nand), 0, EVEREST_NAND_ADDR + i * EVEREST_NAND_SPACING);
+	}
+
+	usb = qdev_new("imx31.usb");
+	sysbus_realize_and_unref(SYS_BUS_DEVICE(usb), &error_fatal);
+	sysbus_mmio_map(SYS_BUS_DEVICE(usb), 0, EVEREST_USB_ADDR);
+	for (i = 0; i < EVEREST_USB_HOST_COUNT; i++) {
+		usb = qdev_new(TYPE_CHIPIDEA);
+		sysbus_realize_and_unref(SYS_BUS_DEVICE(usb), &error_fatal);
+		sysbus_mmio_map_overlap(SYS_BUS_DEVICE(usb), 0, everest_usb_host[i].addr, EVEREST_USB_HOST_PRIORITY);
+		sysbus_connect_irq(SYS_BUS_DEVICE(usb), 0,
+				qdev_get_gpio_in(DEVICE(&s->soc.avic), everest_usb_host[i].irq));
+	}
+
+	/* The pin multiplexer only stores its configuration. */
+	memory_region_init_ram(&s->iomuxc, NULL, "everest.iomuxc", EVEREST_IOMUXC_SIZE, &error_fatal);
+	memory_region_add_subregion(get_system_memory(), EVEREST_IOMUXC_ADDR, &s->iomuxc);
+
+	pmic = ssi_create_peripheral((SSIBus *)qdev_get_child_bus(s->cspi[EVEREST_PMIC_CSPI], "spi"), "mc13783");
+	sysbus_connect_irq(SYS_BUS_DEVICE(s->cspi[EVEREST_PMIC_CSPI]), 1 + EVEREST_PMIC_CS,
+			qdev_get_gpio_in_named(pmic, SSI_GPIO_CS, 0));
+
+	for (i = 0; i < ARRAY_SIZE(everest_boot_stub); i++) {
+		boot_stub[i] = cpu_to_le32(everest_boot_stub[i]);
+	}
+	rom_add_blob_fixed("everest.boot-stub", boot_stub, sizeof(boot_stub), EVEREST_BOOT_STUB_ADDR);
+	for (i = 0; i < ARRAY_SIZE(everest_harp_cfg); i++) {
+		stn_le_p(harp_cfg + everest_harp_cfg[i].offset, everest_harp_cfg[i].size, everest_harp_cfg[i].value);
+	}
+	memcpy(harp_cfg + EVEREST_HARP_CFG_SERIAL_OFFSET, everest_harp_cfg_serial, sizeof(everest_harp_cfg_serial));
+	rom_add_blob_fixed("everest.harp-cfg", harp_cfg, sizeof(harp_cfg), EVEREST_HARP_CFG_ADDR);
+	rom_add_blob_fixed("everest.boot-args", &memory_size, sizeof(memory_size),
+			EVEREST_BOOT_ARGS_MEMORY_SIZE_ADDR);
+
+	everest_binfo.ram_size = machine->ram_size;
+	if (!qtest_enabled()) {
+		arm_load_kernel(&s->soc.cpu, machine, &everest_binfo);
+	}
+}
+
+static void everest_machine_init(MachineClass *mc)
+{
+	mc->desc = "HumanWare BrailleNote Apex (ARM1136)";
+	mc->init = everest_init;
+	mc->ignore_memory_transaction_failures = true;
+	mc->default_ram_size = EVEREST_RAM_SIZE;
+	mc->default_ram_id = "everest.ram";
+}
+
+DEFINE_MACHINE_ARM("everest", everest_machine_init)

@@ -1,0 +1,18 @@
+diff --git a/hw/gpio/imx_gpio.c b/hw/gpio/imx_gpio.c
+index 5abf208..b7ffaed 100644
+--- a/hw/gpio/imx_gpio.c
++++ b/hw/gpio/imx_gpio.c
+@@ -92,10 +92,9 @@ static void imx_gpio_set_int_line(IMXGPIOState *s, int line, IMXGPIOLevel level)
+             }
+         }
+     } else {
+-        /* interrupt is level sensitive */
+-        if (extract64(s->icr, 2*line, 1) == level) {
+-            s->isr = deposit32(s->isr, line, 1, 1);
+-        }
++        /* interrupt is level sensitive: the status follows the pin */
++        s->isr = deposit32(s->isr, line, 1,
++                           extract64(s->icr, 2*line, 1) == level);
+     }
+ }
+ 

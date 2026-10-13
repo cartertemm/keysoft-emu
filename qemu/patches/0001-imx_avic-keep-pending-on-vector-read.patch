@@ -1,0 +1,29 @@
+diff --git a/hw/intc/imx_avic.c b/hw/intc/imx_avic.c
+index a3d71ab..60ae9d0 100644
+--- a/hw/intc/imx_avic.c
++++ b/hw/intc/imx_avic.c
+@@ -77,7 +77,7 @@ static void imx_avic_update(IMXAVICState *s)
+      * priority higher than the value of intmask
+      */
+     for (i = 0; i < IMX_AVIC_NUM_IRQS; i++) {
+-        if (flags & (1UL << i)) {
++        if (flags & (1ULL << i)) {
+             if (imx_avic_prio(s, i) > s->intmask) {
+                 qemu_set_irq(s->irq, 1);
+                 return;
+@@ -167,7 +167,6 @@ static uint64_t imx_avic_read(void *opaque,
+             }
+         }
+         if (irq >= 0) {
+-            imx_avic_set_irq(s, irq, 0);
+             return irq << 16 | prio;
+         }
+         return 0xffffffffULL;
+@@ -177,7 +176,6 @@ static uint64_t imx_avic_read(void *opaque,
+         uint64_t flags = s->pending & s->enabled & s->is_fiq;
+         int i = ctz64(flags);
+         if (i < 64) {
+-            imx_avic_set_irq(opaque, i, 0);
+             return i;
+         }
+         return 0xffffffffULL;
