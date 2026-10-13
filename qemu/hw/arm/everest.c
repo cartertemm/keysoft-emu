@@ -10,6 +10,7 @@
 #include "hw/arm/fsl-imx31.h"
 #include "hw/arm/boot.h"
 #include "hw/arm/machines-qom.h"
+#include "hw/char/imx_serial.h"
 #include "hw/core/boards.h"
 #include "hw/core/loader.h"
 #include "hw/core/qdev-properties-system.h"
@@ -22,6 +23,7 @@
 #include "system/block-backend.h"
 #include "system/blockdev.h"
 #include "system/qtest.h"
+#include "system/system.h"
 
 #define EVEREST_RAM_SIZE (256 * MiB)
 
@@ -31,10 +33,6 @@
 
 #define EVEREST_IOMUXC_ADDR 0x43fac000
 #define EVEREST_IOMUXC_SIZE 0x4000
-#define EVEREST_SDMA_ADDR 0x53fd4000
-#define EVEREST_SDMA_IRQ 34
-#define EVEREST_RTC_ADDR 0x53fd8000
-#define EVEREST_RTC_IRQ 25
 #define EVEREST_NAND_ADDR (FSL_IMX31_FLASH1_ADDR + 0x400)
 #define EVEREST_NAND_SPACING 0x100
 #define EVEREST_NAND_COUNT 4
@@ -110,6 +108,29 @@ static const struct {
 	{ 0x53f84000, 17 },
 };
 
+/* UART1 and UART2 belong to the SoC model and use host serial ports 0 and 1. */
+#define EVEREST_FIRST_BOARD_SERIAL 2
+
+static const struct {
+	const char *type;
+	hwaddr addr;
+	int irq;
+} everest_devices[] = {
+	{ "imx31.sdma", 0x53fd4000, 34 },
+	{ "imx31.rtc", 0x53fd8000, 25 },
+	{ "imx31.sdhc", 0x50004000, 9 },
+	{ "imx31.sdhc", 0x50008000, 8 },
+};
+
+static const struct {
+	hwaddr addr;
+	int irq;
+} everest_uart[] = {
+	{ 0x5000c000, 18 },
+	{ 0x43fb0000, 46 },
+	{ 0x43fb4000, 47 },
+};
+
 static const struct {
 	hwaddr addr;
 	int irq;
@@ -154,8 +175,18 @@ static void everest_init(MachineState *machine)
 	for (i = 0; i < EVEREST_CSPI_COUNT; i++) {
 		s->cspi[i] = everest_create_device(s, "imx31.cspi", everest_cspi[i].addr, everest_cspi[i].irq);
 	}
-	everest_create_device(s, "imx31.sdma", EVEREST_SDMA_ADDR, EVEREST_SDMA_IRQ);
-	everest_create_device(s, "imx31.rtc", EVEREST_RTC_ADDR, EVEREST_RTC_IRQ);
+	for (i = 0; i < ARRAY_SIZE(everest_devices); i++) {
+		everest_create_device(s, everest_devices[i].type, everest_devices[i].addr, everest_devices[i].irq);
+	}
+	for (i = 0; i < ARRAY_SIZE(everest_uart); i++) {
+		DeviceState *uart = qdev_new(TYPE_IMX_SERIAL);
+
+		qdev_prop_set_chr(uart, "chardev", serial_hd(EVEREST_FIRST_BOARD_SERIAL + i));
+		sysbus_realize_and_unref(SYS_BUS_DEVICE(uart), &error_fatal);
+		sysbus_mmio_map(SYS_BUS_DEVICE(uart), 0, everest_uart[i].addr);
+		sysbus_connect_irq(SYS_BUS_DEVICE(uart), 0,
+				qdev_get_gpio_in(DEVICE(&s->soc.avic), everest_uart[i].irq));
+	}
 
 	for (i = 0; i < EVEREST_NAND_COUNT; i++) {
 		nand = qdev_new("everest.nand");
