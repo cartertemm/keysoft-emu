@@ -27,14 +27,24 @@ OBJECT_DECLARE_SIMPLE_TYPE(MC13783State, MC13783)
 #define MC13783_REG_INT_STATUS1 3
 #define MC13783_REG_INT_MASK1 4
 #define MC13783_REG_REVISION 7
+#define MC13783_REG_STEREO_DAC 40
+
+#define MC13783_STEREO_DAC_RATE_SHIFT 16
+#define MC13783_STEREO_DAC_RATE_LENGTH 4
 
 /* IC ID 2 (MC13783), silicon revision 3.2 */
 #define MC13783_REVISION 0x00009a
+
+static const uint32_t mc13783_stereo_dac_rates[1 << MC13783_STEREO_DAC_RATE_LENGTH] = {
+	8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 96000,
+	96000, 96000, 96000, 96000, 96000,
+};
 
 struct MC13783State {
 	SSIPeripheral parent_obj;
 
 	qemu_irq irq;
+	uint32_t sample_rate;
 	uint32_t regs[MC13783_NUM_REGS];
 };
 
@@ -44,6 +54,12 @@ static void mc13783_update_irq(MC13783State *s)
 		(s->regs[MC13783_REG_INT_STATUS1] & ~s->regs[MC13783_REG_INT_MASK1]);
 
 	qemu_set_irq(s->irq, pending);
+}
+
+static void mc13783_update_sample_rate(MC13783State *s)
+{
+	s->sample_rate = mc13783_stereo_dac_rates[extract32(s->regs[MC13783_REG_STEREO_DAC],
+			MC13783_STEREO_DAC_RATE_SHIFT, MC13783_STEREO_DAC_RATE_LENGTH)];
 }
 
 static uint32_t mc13783_transfer(SSIPeripheral *dev, uint32_t frame)
@@ -66,6 +82,7 @@ static uint32_t mc13783_transfer(SSIPeripheral *dev, uint32_t frame)
 		s->regs[reg] = data;
 		break;
 	}
+	mc13783_update_sample_rate(s);
 	mc13783_update_irq(s);
 	return s->regs[reg];
 }
@@ -78,6 +95,7 @@ static void mc13783_reset(DeviceState *dev)
 	s->regs[MC13783_REG_INT_MASK0] = MC13783_DATA_MASK;
 	s->regs[MC13783_REG_INT_MASK1] = MC13783_DATA_MASK;
 	s->regs[MC13783_REG_REVISION] = MC13783_REVISION;
+	mc13783_update_sample_rate(s);
 	mc13783_update_irq(s);
 }
 
@@ -86,6 +104,7 @@ static void mc13783_realize(SSIPeripheral *dev, Error **errp)
 	MC13783State *s = MC13783(dev);
 
 	qdev_init_gpio_out(DEVICE(dev), &s->irq, 1);
+	object_property_add_uint32_ptr(OBJECT(dev), "sample-rate", &s->sample_rate, OBJ_PROP_FLAG_READ);
 }
 
 static const VMStateDescription vmstate_mc13783 = {

@@ -116,10 +116,20 @@ static const struct {
 	hwaddr addr;
 	int irq;
 } everest_devices[] = {
-	{ "imx31.sdma", 0x53fd4000, 34 },
 	{ "imx31.rtc", 0x53fd8000, 25 },
 	{ "imx31.sdhc", 0x50004000, 9 },
 	{ "imx31.sdhc", 0x50008000, 8 },
+};
+
+#define EVEREST_SDMA_ADDR 0x53fd4000
+#define EVEREST_SDMA_IRQ 34
+
+static const struct {
+	hwaddr addr;
+	int tx_dma_event;
+} everest_ssi[] = {
+	{ 0x43fa0000, 29 },
+	{ 0x50014000, 25 },
 };
 
 static const struct {
@@ -159,6 +169,7 @@ static void everest_init(MachineState *machine)
 	DeviceState *pmic;
 	DeviceState *nand;
 	DeviceState *usb;
+	DeviceState *sdma;
 	DriveInfo *nand_drive;
 	uint32_t boot_stub[ARRAY_SIZE(everest_boot_stub)];
 	uint8_t harp_cfg[EVEREST_HARP_CFG_SIZE] = { 0 };
@@ -229,6 +240,19 @@ static void everest_init(MachineState *machine)
 	rom_add_blob_fixed("everest.boot-args", &memory_size, sizeof(memory_size),
 			EVEREST_BOOT_ARGS_MEMORY_SIZE_ADDR);
 
+	sdma = everest_create_device(s, "imx31.sdma", EVEREST_SDMA_ADDR, EVEREST_SDMA_IRQ);
+	for (i = 0; i < ARRAY_SIZE(everest_ssi); i++) {
+		DeviceState *ssi = qdev_new("imx31.ssi");
+
+		if (machine->audiodev) {
+			qdev_prop_set_string(ssi, "audiodev", machine->audiodev);
+		}
+		object_property_set_link(OBJECT(ssi), "codec", OBJECT(pmic), &error_fatal);
+		sysbus_realize_and_unref(SYS_BUS_DEVICE(ssi), &error_fatal);
+		sysbus_mmio_map(SYS_BUS_DEVICE(ssi), 0, everest_ssi[i].addr);
+		sysbus_connect_irq(SYS_BUS_DEVICE(ssi), 0, qdev_get_gpio_in(sdma, everest_ssi[i].tx_dma_event));
+	}
+
 	everest_binfo.ram_size = machine->ram_size;
 	if (!qtest_enabled()) {
 		arm_load_kernel(&s->soc.cpu, machine, &everest_binfo);
@@ -242,6 +266,7 @@ static void everest_machine_init(MachineClass *mc)
 	mc->ignore_memory_transaction_failures = true;
 	mc->default_ram_size = EVEREST_RAM_SIZE;
 	mc->default_ram_id = "everest.ram";
+	machine_add_audiodev_property(mc);
 }
 
 DEFINE_MACHINE_ARM("everest", everest_machine_init)
