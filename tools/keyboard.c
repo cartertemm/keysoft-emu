@@ -117,6 +117,18 @@ static void handle_key(HWND window, WPARAM virtual_key, BOOL down)
 	}
 }
 
+/* Key-up events go to the new focus window, so release held keys ourselves. */
+static void release_held_keys(HWND window)
+{
+	size_t i;
+
+	for (i = 0; i < sizeof(key_map) / sizeof(key_map[0]); i++) {
+		if (held[key_map[i].virtual_key]) {
+			handle_key(window, key_map[i].virtual_key, FALSE);
+		}
+	}
+}
+
 static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
 	switch (message) {
@@ -133,6 +145,9 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 		return 0;
 	case WM_KEYUP:
 		handle_key(window, wparam, FALSE);
+		return 0;
+	case WM_KILLFOCUS:
+		release_held_keys(window);
 		return 0;
 	case WM_DESTROY:
 		PostQuitMessage(0);
