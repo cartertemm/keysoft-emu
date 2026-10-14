@@ -30,7 +30,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(IMX31SSIState, IMX31_SSI)
 #define SSI_OUTPUT_CHANNELS 2
 #define SSI_SAMPLE_RATE 44100
 #define SSI_TICK_NS (2 * SCALE_MS)
-#define SSI_MAX_FRAMES_PER_TICK (SSI_SAMPLE_RATE / 20)
+#define SSI_CUSHION_NS (100 * SCALE_MS)
+#define SSI_CUSHION_FRAMES (SSI_SAMPLE_RATE / 10)
 #define SSI_RING_FRAMES (SSI_SAMPLE_RATE / 2)
 
 #define SSI_STX0 0x00
@@ -68,11 +69,11 @@ struct IMX31SSIState {
 	bool active;
 
 	QEMUTimer *timer;
-	int64_t start_ns;
-	int64_t frames_shifted;
 	int16_t ring[SSI_RING_FRAMES * SSI_OUTPUT_CHANNELS];
 	uint32_t ring_head;
 	uint32_t ring_count;
+	bool playing;
+	int64_t first_frame_ns;
 };
 
 static bool imx31_ssi_fifo_pop(IMX31SSIState *s, int16_t *sample)
@@ -132,6 +133,9 @@ static void imx31_ssi_ring_push(IMX31SSIState *s, int16_t left, int16_t right)
 {
 	uint32_t tail = (s->ring_head + s->ring_count) % SSI_RING_FRAMES;
 
+	if (s->ring_count == 0) {
+		s->first_frame_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT);
+	}
 	if (s->ring_count == SSI_RING_FRAMES) {
 		s->ring_head = (s->ring_head + 1) % SSI_RING_FRAMES;
 		s->ring_count--;
@@ -142,23 +146,20 @@ static void imx31_ssi_ring_push(IMX31SSIState *s, int16_t left, int16_t right)
 }
 
 /*
- * Shifts frames out of the FIFO at the sample rate in guest time, as the
- * codec's bit clock does, and keeps them for the host audio backend.
+ * Shifts frames out of the FIFO until the cushion for the host audio backend
+ * is full. The host audio device sets the sample rate, as the codec's bit
+ * clock does on the board. With instruction counting, guest time can fall
+ * behind host time, so a rate in guest time would let the host device run out
+ * of frames. The cushion covers short pauses of the guest.
  */
 static void imx31_ssi_tick(void *opaque)
 {
 	IMX31SSIState *s = opaque;
-	int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-	int64_t due = (now - s->start_ns) * SSI_SAMPLE_RATE / NANOSECONDS_PER_SECOND - s->frames_shifted;
+	int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT);
 	int slots = imx31_ssi_slots_per_frame(s);
-	int64_t frame;
+	uint32_t frame;
 
-	if (due > SSI_MAX_FRAMES_PER_TICK) {
-		s->frames_shifted += due - SSI_MAX_FRAMES_PER_TICK;
-		due = SSI_MAX_FRAMES_PER_TICK;
-	}
-	s->frames_shifted += due;
-	for (frame = 0; frame < due; frame++) {
+	for (frame = s->ring_count; frame < SSI_CUSHION_FRAMES; frame++) {
 		int16_t left, right;
 
 		if (!imx31_ssi_next_sample(s, &left)) {
@@ -173,11 +174,29 @@ static void imx31_ssi_tick(void *opaque)
 	timer_mod(s->timer, now + SSI_TICK_NS);
 }
 
+/*
+ * Playback starts when the cushion is full, or when the guest has stopped
+ * sending frames before that. It stops when the cushion runs out.
+ */
+static bool imx31_ssi_playing(IMX31SSIState *s)
+{
+	if (s->ring_count == 0) {
+		s->playing = false;
+	} else if (!s->playing) {
+		s->playing = s->ring_count >= SSI_CUSHION_FRAMES ||
+			qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT) - s->first_frame_ns >= SSI_CUSHION_NS;
+	}
+	return s->playing;
+}
+
 static void imx31_ssi_audio_callback(void *opaque, int avail)
 {
 	IMX31SSIState *s = opaque;
 	uint32_t wanted = avail / (sizeof(int16_t) * SSI_OUTPUT_CHANNELS);
 
+	if (!imx31_ssi_playing(s)) {
+		return;
+	}
 	while (wanted > 0 && s->ring_count > 0) {
 		uint32_t frames = MIN(MIN(wanted, s->ring_count), SSI_RING_FRAMES - s->ring_head);
 		size_t bytes = frames * sizeof(int16_t) * SSI_OUTPUT_CHANNELS;
@@ -222,9 +241,7 @@ static void imx31_ssi_update_active(IMX31SSIState *s)
 	s->active = active;
 	if (active) {
 		imx31_ssi_open_voice(s);
-		s->start_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-		s->frames_shifted = 0;
-		timer_mod(s->timer, s->start_ns + SSI_TICK_NS);
+		timer_mod(s->timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT) + SSI_TICK_NS);
 	} else {
 		timer_del(s->timer);
 	}
@@ -293,7 +310,7 @@ static void imx31_ssi_realize(DeviceState *dev, Error **errp)
 	memory_region_init_io(&s->iomem, OBJECT(dev), &imx31_ssi_ops, s, TYPE_IMX31_SSI, SSI_MMIO_SIZE);
 	sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
 	sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->tx_dma_request);
-	s->timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, imx31_ssi_tick, s);
+	s->timer = timer_new_ns(QEMU_CLOCK_VIRTUAL_RT, imx31_ssi_tick, s);
 }
 
 static const Property imx31_ssi_properties[] = {
