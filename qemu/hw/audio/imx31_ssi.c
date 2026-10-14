@@ -33,6 +33,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(IMX31SSIState, IMX31_SSI)
 #define SSI_CUSHION_NS (100 * SCALE_MS)
 #define SSI_CUSHION_FRAMES (SSI_SAMPLE_RATE / 10)
 #define SSI_RING_FRAMES (SSI_SAMPLE_RATE / 2)
+#define SSI_SILENCE_FRAMES 1024
+#define SSI_FRAME_BYTES (sizeof(int16_t) * SSI_OUTPUT_CHANNELS)
 
 #define SSI_STX0 0x00
 #define SSI_SCR 0x10
@@ -189,26 +191,32 @@ static bool imx31_ssi_playing(IMX31SSIState *s)
 	return s->playing;
 }
 
+/*
+ * The host voice always gets frames, silence when there is nothing to play.
+ * A host device that runs out of frames plays its old buffer contents again,
+ * and stopping the voice cuts off the frames that it still holds.
+ */
 static void imx31_ssi_audio_callback(void *opaque, int avail)
 {
+	static int16_t silence[SSI_SILENCE_FRAMES * SSI_OUTPUT_CHANNELS];
 	IMX31SSIState *s = opaque;
-	uint32_t wanted = avail / (sizeof(int16_t) * SSI_OUTPUT_CHANNELS);
+	uint32_t wanted = avail / SSI_FRAME_BYTES;
 
-	if (!imx31_ssi_playing(s)) {
-		return;
-	}
-	while (wanted > 0 && s->ring_count > 0) {
-		uint32_t frames = MIN(MIN(wanted, s->ring_count), SSI_RING_FRAMES - s->ring_head);
-		size_t bytes = frames * sizeof(int16_t) * SSI_OUTPUT_CHANNELS;
-		size_t written = audio_be_write(s->audio_be, s->voice,
-				&s->ring[s->ring_head * SSI_OUTPUT_CHANNELS], bytes);
+	while (wanted > 0) {
+		bool from_ring = imx31_ssi_playing(s);
+		uint32_t frames = from_ring ?
+			MIN(MIN(wanted, s->ring_count), SSI_RING_FRAMES - s->ring_head) :
+			MIN(wanted, SSI_SILENCE_FRAMES);
+		int16_t *data = from_ring ? &s->ring[s->ring_head * SSI_OUTPUT_CHANNELS] : silence;
 
-		frames = written / (sizeof(int16_t) * SSI_OUTPUT_CHANNELS);
+		frames = audio_be_write(s->audio_be, s->voice, data, frames * SSI_FRAME_BYTES) / SSI_FRAME_BYTES;
 		if (frames == 0) {
 			break;
 		}
-		s->ring_head = (s->ring_head + frames) % SSI_RING_FRAMES;
-		s->ring_count -= frames;
+		if (from_ring) {
+			s->ring_head = (s->ring_head + frames) % SSI_RING_FRAMES;
+			s->ring_count -= frames;
+		}
 		wanted -= frames;
 	}
 }
@@ -241,12 +249,10 @@ static void imx31_ssi_update_active(IMX31SSIState *s)
 	s->active = active;
 	if (active) {
 		imx31_ssi_open_voice(s);
+		audio_be_set_active_out(s->audio_be, s->voice, true);
 		timer_mod(s->timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT) + SSI_TICK_NS);
 	} else {
 		timer_del(s->timer);
-	}
-	if (s->voice) {
-		audio_be_set_active_out(s->audio_be, s->voice, active);
 	}
 }
 
@@ -257,6 +263,7 @@ static void imx31_ssi_reset(DeviceState *dev)
 	memset(s->regs, 0, sizeof(s->regs));
 	s->fifo_head = 0;
 	s->fifo_count = 0;
+	s->ring_count = 0;
 	imx31_ssi_update_active(s);
 }
 

@@ -1,0 +1,53 @@
+diff --git a/audio/audio-mixeng-be.c b/audio/audio-mixeng-be.c
+index f7d73d8..6343b5c 100644
+--- a/audio/audio-mixeng-be.c
++++ b/audio/audio-mixeng-be.c
+@@ -590,10 +590,10 @@ static void audio_reset_timer(AudioMixengBackend *s)
+ {
+     if (audio_is_timer_needed(s)) {
+         timer_mod_anticipate_ns(s->ts,
+-            qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + s->period_ticks);
++            qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT) + s->period_ticks);
+         if (!s->timer_running) {
+             s->timer_running = true;
+-            s->timer_last = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++            s->timer_last = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT);
+             trace_audio_timer_start(s->period_ticks / SCALE_MS);
+         }
+     } else {
+@@ -610,7 +610,7 @@ static void audio_timer (void *opaque)
+     int64_t now, diff;
+     AudioMixengBackend *s = opaque;
+ 
+-    now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT);
+     diff = now - s->timer_last;
+     if (diff > s->period_ticks * 3 / 2) {
+         trace_audio_timer_delayed(diff / SCALE_MS);
+@@ -1456,7 +1456,7 @@ static void audio_mixeng_backend_init(Object *obj)
+     QLIST_INIT(&s->hw_head_out);
+     QLIST_INIT(&s->hw_head_in);
+     QLIST_INIT(&s->cap_head);
+-    s->ts = timer_new_ns(QEMU_CLOCK_VIRTUAL, audio_timer, s);
++    s->ts = timer_new_ns(QEMU_CLOCK_VIRTUAL_RT, audio_timer, s);
+     s->run_timer = g_timer_new();
+ 
+     s->vmse = qemu_add_vm_change_state_handler(audio_vm_change_state_handler, s);
+@@ -1726,7 +1726,7 @@ int audio_buffer_bytes(AudiodevPerDirectionOptions *pdo,
+ void audio_rate_start(RateCtl *rate)
+ {
+     memset(rate, 0, sizeof(RateCtl));
+-    rate->start_ticks = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    rate->start_ticks = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT);
+ }
+ 
+ size_t audio_rate_peek_bytes(RateCtl *rate, struct audio_pcm_info *info)
+@@ -1736,7 +1736,7 @@ size_t audio_rate_peek_bytes(RateCtl *rate, struct audio_pcm_info *info)
+     int64_t bytes;
+     int64_t frames;
+ 
+-    now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT);
+     ticks = now - rate->start_ticks;
+     bytes = muldiv64(ticks, info->bytes_per_second, NANOSECONDS_PER_SECOND);
+     frames = (bytes - rate->bytes_sent) / info->bytes_per_frame;
