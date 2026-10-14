@@ -23,6 +23,7 @@
 #include "system/block-backend.h"
 #include "system/blockdev.h"
 #include "system/qtest.h"
+#include "system/reset.h"
 #include "system/system.h"
 
 #define EVEREST_RAM_SIZE (256 * MiB)
@@ -153,6 +154,42 @@ static struct arm_boot_info everest_binfo = {
 	.loader_start = FSL_IMX31_SDRAM0_ADDR,
 };
 
+/*
+ * Changes to the firmware image in guest memory. Each entry replaces one
+ * instruction, and only when the original instruction is there.
+ */
+typedef struct EverestFirmwarePatch {
+	hwaddr addr;
+	uint32_t original;
+	uint32_t replacement;
+} EverestFirmwarePatch;
+
+static const EverestFirmwarePatch everest_firmware_patches[] = {
+	/*
+	 * VAFramework.dll, CVALicenseMgr::ValidateInfo: "mov r0, r4" becomes
+	 * "mov r0, #0", so every license query reports a valid license. The
+	 * license keys of a real unit are in its NOR flash, which is not available.
+	 */
+	{ 0x81ddc534, 0xe1a00004, 0xe3a00000 },
+};
+
+static void everest_reset(MachineState *machine, ResetType type)
+{
+	int i;
+
+	qemu_devices_reset(type);
+	for (i = 0; i < ARRAY_SIZE(everest_firmware_patches); i++) {
+		const EverestFirmwarePatch *patch = &everest_firmware_patches[i];
+		uint32_t word = 0;
+
+		address_space_read(&address_space_memory, patch->addr, MEMTXATTRS_UNSPECIFIED, &word, sizeof(word));
+		if (le32_to_cpu(word) == patch->original) {
+			word = cpu_to_le32(patch->replacement);
+			address_space_write(&address_space_memory, patch->addr, MEMTXATTRS_UNSPECIFIED, &word, sizeof(word));
+		}
+	}
+}
+
 static DeviceState *everest_create_device(EverestState *s, const char *type, hwaddr addr, int irq)
 {
 	DeviceState *dev = qdev_new(type);
@@ -262,6 +299,7 @@ static void everest_machine_init(MachineClass *mc)
 {
 	mc->desc = "HumanWare BrailleNote Apex (ARM1136)";
 	mc->init = everest_init;
+	mc->reset = everest_reset;
 	mc->ignore_memory_transaction_failures = true;
 	mc->default_ram_size = EVEREST_RAM_SIZE;
 	mc->default_ram_id = "everest.ram";
