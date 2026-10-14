@@ -5,8 +5,11 @@
  * controller of the running emulator over TCP. Chords work because every key
  * is sent down and up separately, like the real keyboard does.
  *
- * Keys: F D S = dots 1 2 3, J K L = dots 4 5 6, Space = space,
+ * Keys: F D S = dots 1 2 3, J K L = dots 4 5 6, Space or Alt = space,
  * Backspace = dot 7, Enter = dot 8. Escape quits.
+ *
+ * Most PC keyboards report only 6 normal keys at once, so space with all six
+ * dots drops a key. Alt is a modifier and does not count toward that limit.
  *
  * Build: gcc -O2 -mwindows -o keyboard.exe tools/keyboard.c -lws2_32
  * Usage: keyboard.exe [port]   (default port 5555)
@@ -27,7 +30,7 @@
 static const char window_class[] = "BrailleKeyboard";
 static const char window_title[] = "Braille Keyboard";
 static const char instructions[] =
-	"F D S J K L are dots 1 to 6, Space is space, Backspace is dot 7, Enter is dot 8.\r\n"
+	"F D S J K L are dots 1 to 6, Space or Alt is space, Backspace is dot 7, Enter is dot 8.\r\n"
 	"Press Escape to quit.";
 
 typedef struct KeyMapping {
@@ -46,6 +49,7 @@ static const KeyMapping key_map[] = {
 	{ VK_BACK, 28 },     /* dot 7 */
 	{ VK_RETURN, 19 },   /* dot 8 */
 	{ VK_SPACE, 125 },   /* space */
+	{ VK_MENU, 125 },    /* space, either Alt key */
 };
 
 static SOCKET sock = INVALID_SOCKET;
@@ -140,11 +144,16 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 	case WM_SIZE:
 		MoveWindow(label, 0, 0, LOWORD(lparam), HIWORD(lparam), TRUE);
 		return 0;
+	/* Keys pressed while Alt is down come as system keys. */
+	case WM_SYSKEYDOWN:
+	case WM_SYSKEYUP:
+		if (find_code(wparam) < 0) {
+			break;
+		}
+		/* fall through */
 	case WM_KEYDOWN:
-		handle_key(window, wparam, TRUE);
-		return 0;
 	case WM_KEYUP:
-		handle_key(window, wparam, FALSE);
+		handle_key(window, wparam, message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
 		return 0;
 	case WM_KILLFOCUS:
 		release_held_keys(window);
