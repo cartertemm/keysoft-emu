@@ -6,7 +6,8 @@
  * is sent down and up separately, like the real keyboard does.
  *
  * Keys: F D S = dots 1 2 3, J K L = dots 4 5 6, Space or Alt = space,
- * Backspace = dot 7, Enter = dot 8. Escape quits.
+ * Backspace = dot 7, Enter = dot 8. F12 flips the power switch off and on.
+ * Escape quits.
  *
  * Most PC keyboards report only 6 normal keys at once, so space with all six
  * dots drops a key. Alt is a modifier and does not count toward that limit.
@@ -22,6 +23,8 @@
 
 #define DEFAULT_PORT 5555
 #define BRAILLE_FIFO 1
+#define POWER_SWITCH_SOURCE 3
+#define POWER_SWITCH_KEY VK_F12
 #define RELEASE_FLAG 0x80
 #define KEY_COUNT 256
 #define WINDOW_WIDTH 480
@@ -31,6 +34,7 @@ static const char window_class[] = "BrailleKeyboard";
 static const char window_title[] = "Braille Keyboard";
 static const char instructions[] =
 	"F D S J K L are dots 1 to 6, Space or Alt is space, Backspace is dot 7, Enter is dot 8.\r\n"
+	"F12 turns the power switch off or on again. Switch off before you close the emulator.\r\n"
 	"Press Escape to quit.";
 
 typedef struct KeyMapping {
@@ -54,6 +58,7 @@ static const KeyMapping key_map[] = {
 
 static SOCKET sock = INVALID_SOCKET;
 static BOOL held[KEY_COUNT];
+static BOOL power_off;
 static HWND label;
 
 static int find_code(WPARAM virtual_key)
@@ -86,11 +91,16 @@ static SOCKET connect_to_emulator(int port)
 	return s;
 }
 
-static int send_event(int code, int released)
+static int send_message(int source, int entry)
 {
-	char message[2] = { BRAILLE_FIFO, (char)(code | (released ? RELEASE_FLAG : 0)) };
+	char message[2] = { (char)source, (char)entry };
 
 	return send(sock, message, sizeof(message), 0) == sizeof(message);
+}
+
+static int send_event(int code, int released)
+{
+	return send_message(BRAILLE_FIFO, code | (released ? RELEASE_FLAG : 0));
 }
 
 static void show_error(HWND owner, const char *text)
@@ -101,13 +111,14 @@ static void show_error(HWND owner, const char *text)
 static void handle_key(HWND window, WPARAM virtual_key, BOOL down)
 {
 	int code;
+	int sent;
 
 	if (virtual_key == VK_ESCAPE) {
 		DestroyWindow(window);
 		return;
 	}
 	code = find_code(virtual_key);
-	if (code < 0 || virtual_key >= KEY_COUNT) {
+	if ((code < 0 && virtual_key != POWER_SWITCH_KEY) || virtual_key >= KEY_COUNT) {
 		return;
 	}
 	/* Held keys repeat their key-down event; send only the first one. */
@@ -115,7 +126,16 @@ static void handle_key(HWND window, WPARAM virtual_key, BOOL down)
 		return;
 	}
 	held[virtual_key] = down;
-	if (!send_event(code, !down)) {
+	if (virtual_key == POWER_SWITCH_KEY) {
+		if (!down) {
+			return;
+		}
+		power_off = !power_off;
+		sent = send_message(POWER_SWITCH_SOURCE, power_off);
+	} else {
+		sent = send_event(code, !down);
+	}
+	if (!sent) {
 		show_error(window, "The emulator closed the connection.");
 		DestroyWindow(window);
 	}

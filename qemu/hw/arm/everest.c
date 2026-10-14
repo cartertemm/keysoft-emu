@@ -34,6 +34,7 @@
 #define EVEREST_CSPI_COUNT 3
 #define EVEREST_PMIC_CSPI 1
 #define EVEREST_PMIC_CS 1
+#define EVEREST_PMIC_IRQ_GPIO1_PIN 2
 
 #define EVEREST_IOMUXC_ADDR 0x43fac000
 #define EVEREST_IOMUXC_SIZE 0x4000
@@ -289,6 +290,7 @@ static void everest_init(MachineState *machine)
 	pmic = ssi_create_peripheral((SSIBus *)qdev_get_child_bus(s->cspi[EVEREST_PMIC_CSPI], "spi"), "mc13783");
 	sysbus_connect_irq(SYS_BUS_DEVICE(s->cspi[EVEREST_PMIC_CSPI]), 1 + EVEREST_PMIC_CS,
 			qdev_get_gpio_in_named(pmic, SSI_GPIO_CS, 0));
+	qdev_connect_gpio_out(pmic, 0, qdev_get_gpio_in(DEVICE(&s->soc.gpio[0]), EVEREST_PMIC_IRQ_GPIO1_PIN));
 
 	for (i = 0; i < ARRAY_SIZE(everest_boot_stub); i++) {
 		boot_stub[i] = cpu_to_le32(everest_boot_stub[i]);
@@ -311,6 +313,7 @@ static void everest_init(MachineState *machine)
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(keys), &error_fatal);
 	sysbus_mmio_map(SYS_BUS_DEVICE(keys), 0, EVEREST_KEYS_ADDR);
 	sysbus_connect_irq(SYS_BUS_DEVICE(keys), 0, qdev_get_gpio_in(DEVICE(&s->soc.gpio[0]), EVEREST_KEYS_IRQ_GPIO1_PIN));
+	qdev_connect_gpio_out_named(keys, "power-off", 0, qdev_get_gpio_in_named(pmic, "power-off", 0));
 
 	sdma = everest_create_device(s, "imx31.sdma", EVEREST_SDMA_ADDR, EVEREST_SDMA_IRQ);
 	for (i = 0; i < ARRAY_SIZE(everest_ssi); i++) {

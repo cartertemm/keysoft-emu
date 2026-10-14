@@ -6,7 +6,9 @@
  * 6..0 and bit 7 set for a release.
  *
  * Host programs send events through the "chardev" as two-byte messages: the
- * FIFO number (1 or 2), then the entry.
+ * FIFO number (1 or 2), then the entry. Source 3 is the power switch, which is
+ * not part of the FPGA: entry 1 turns it off and entry 0 turns it on, through
+ * the "power-off" output.
  *
  * The controller has one interrupt output. A source becomes pending when an
  * entry arrives in its FIFO and stays pending until the kernel acknowledges
@@ -43,12 +45,14 @@ OBJECT_DECLARE_SIMPLE_TYPE(EverestKeysState, EVEREST_KEYS)
 #define KEYS_FIFO_COUNT 2
 #define KEYS_FIFO_SIZE 64
 #define KEYS_MESSAGE_SIZE 2
+#define KEYS_POWER_SWITCH_SOURCE 3
 
 struct EverestKeysState {
 	SysBusDevice parent_obj;
 
 	MemoryRegion iomem;
 	qemu_irq irq;
+	qemu_irq power_off;
 	CharFrontend chr;
 	Fifo8 fifos[KEYS_FIFO_COUNT];
 	uint8_t message[KEYS_MESSAGE_SIZE];
@@ -160,6 +164,8 @@ static void everest_keys_receive(void *opaque, const uint8_t *buf, int size)
 		s->message_length = 0;
 		if (s->message[0] >= 1 && s->message[0] <= KEYS_FIFO_COUNT) {
 			everest_keys_queue(s, s->message[0] - 1, s->message[1]);
+		} else if (s->message[0] == KEYS_POWER_SWITCH_SOURCE) {
+			qemu_set_irq(s->power_off, s->message[1] != 0);
 		}
 	}
 }
@@ -187,6 +193,7 @@ static void everest_keys_realize(DeviceState *dev, Error **errp)
 	memory_region_init_io(&s->iomem, OBJECT(dev), &everest_keys_ops, s, TYPE_EVEREST_KEYS, KEYS_MMIO_SIZE);
 	sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
 	sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
+	qdev_init_gpio_out_named(dev, &s->power_off, "power-off", 1);
 	for (i = 0; i < KEYS_FIFO_COUNT; i++) {
 		fifo8_create(&s->fifos[i], KEYS_FIFO_SIZE);
 	}
