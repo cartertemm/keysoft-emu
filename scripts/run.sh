@@ -11,6 +11,8 @@ STATE_DIR="${STATE_DIR:-$PROJECT/state}"
 SERIAL="${SERIAL:-stdio}"
 # The guest's telnet server is reachable on this host port.
 TELNET_PORT="${TELNET_PORT:-2323}"
+# tools/keyboard.exe sends braille key presses to this host port.
+KEYS_PORT="${KEYS_PORT:-5555}"
 KERNEL_ADDR=0x80200000
 # The Everest board puts a small stub here that stands in for the boot loader.
 BOOT_STUB_ADDR=0x80010000
@@ -31,6 +33,7 @@ done
 PATH="$QEMU_BUILD/subprojects/slirp:$MINGW_BIN:$PATH" exec "$QEMU_BUILD/qemu-system-arm.exe" -M everest -display none -serial "$SERIAL" \
 	-icount shift=auto \
 	-nic "user,model=lan9118,hostfwd=tcp:127.0.0.1:$TELNET_PORT-:23" \
+	-chardev "socket,id=keys,host=127.0.0.1,port=$KEYS_PORT,server=on,wait=off" \
 	"${nand_drives[@]}" \
 	-device loader,file="$PROJECT/extracted/Everest_Kernel/image.bin",addr=$KERNEL_ADDR,force-raw=on \
 	-device loader,addr=$BOOT_STUB_ADDR,cpu-num=0 "$@"
