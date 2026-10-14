@@ -25,6 +25,7 @@ add_source hw/block system_ss everest_nand.c
 add_source hw/usb system_ss imx31_usb.c
 add_source hw/sd system_ss imx31_sdhc.c
 add_source hw/audio system_ss imx31_ssi.c
+add_source hw/input system_ss everest_keys.c
 
 mkdir -p "$QEMU_TREE/build"
 cd "$QEMU_TREE/build"

@@ -10,6 +10,7 @@
 #include "hw/arm/fsl-imx31.h"
 #include "hw/arm/boot.h"
 #include "hw/arm/machines-qom.h"
+#include "chardev/char.h"
 #include "hw/char/imx_serial.h"
 #include "hw/core/boards.h"
 #include "hw/core/loader.h"
@@ -41,6 +42,10 @@
 #define EVEREST_NAND_COUNT 4
 #define EVEREST_USB_ADDR 0x43f88000
 #define EVEREST_LAN_ADDR FSL_IMX31_CS4_ADDR
+#define EVEREST_KEYS_ADDR (FSL_IMX31_FLASH1_ADDR + 0x800)
+#define EVEREST_KEYS_IRQ_GPIO1_PIN 1
+/* Key events come from a chardev with this id, for example a TCP socket. */
+#define EVEREST_KEYS_CHARDEV "keys"
 #define EVEREST_LAN_IRQ_GPIO1_PIN 4
 #define EVEREST_USB_HOST_COUNT 2
 #define EVEREST_USB_HOST_PRIORITY 1
@@ -226,6 +231,7 @@ static void everest_init(MachineState *machine)
 	DeviceState *nand;
 	DeviceState *usb;
 	DeviceState *sdma;
+	DeviceState *keys;
 	DriveInfo *nand_drive;
 	uint32_t boot_stub[ARRAY_SIZE(everest_boot_stub)];
 	uint8_t harp_cfg[EVEREST_HARP_CFG_SIZE] = { 0 };
@@ -299,6 +305,12 @@ static void everest_init(MachineState *machine)
 	if (qemu_find_nic_info("lan9118", true, NULL)) {
 		lan9118_init(EVEREST_LAN_ADDR, qdev_get_gpio_in(DEVICE(&s->soc.gpio[0]), EVEREST_LAN_IRQ_GPIO1_PIN));
 	}
+
+	keys = qdev_new("everest.keys");
+	qdev_prop_set_chr(keys, "chardev", qemu_chr_find(EVEREST_KEYS_CHARDEV));
+	sysbus_realize_and_unref(SYS_BUS_DEVICE(keys), &error_fatal);
+	sysbus_mmio_map(SYS_BUS_DEVICE(keys), 0, EVEREST_KEYS_ADDR);
+	sysbus_connect_irq(SYS_BUS_DEVICE(keys), 0, qdev_get_gpio_in(DEVICE(&s->soc.gpio[0]), EVEREST_KEYS_IRQ_GPIO1_PIN));
 
 	sdma = everest_create_device(s, "imx31.sdma", EVEREST_SDMA_ADDR, EVEREST_SDMA_IRQ);
 	for (i = 0; i < ARRAY_SIZE(everest_ssi); i++) {
