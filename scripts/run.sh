@@ -24,7 +24,10 @@ for ((chip = 0; chip < NAND_CHIP_COUNT; chip++)); do
 	nand_drives+=(-drive "if=mtd,index=$chip,format=qcow2,file=$image")
 done
 
+# Guest time follows executed instructions. With host-paced time, a slow host
+# disk write can make the guest program its tick timer in the past and freeze.
 PATH="$MINGW_BIN:$PATH" exec "$QEMU_BUILD/qemu-system-arm.exe" -M everest -display none -serial "$SERIAL" \
+	-icount shift=auto \
 	"${nand_drives[@]}" \
 	-device loader,file="$PROJECT/extracted/Everest_Kernel/image.bin",addr=$KERNEL_ADDR,force-raw=on \
 	-device loader,addr=$BOOT_STUB_ADDR,cpu-num=0 "$@"
