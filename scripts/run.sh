@@ -9,6 +9,8 @@ MINGW_BIN="${MINGW_BIN:-/c/Users/cartertemm/scoop/apps/msys2/current/mingw64/bin
 QEMU_IMG="${QEMU_IMG:-/c/Users/cartertemm/scoop/apps/qemu/current/qemu-img.exe}"
 STATE_DIR="${STATE_DIR:-$PROJECT/state}"
 SERIAL="${SERIAL:-stdio}"
+# The guest's telnet server is reachable on this host port.
+TELNET_PORT="${TELNET_PORT:-2323}"
 KERNEL_ADDR=0x80200000
 # The Everest board puts a small stub here that stands in for the boot loader.
 BOOT_STUB_ADDR=0x80010000
@@ -28,6 +30,7 @@ done
 # disk write can make the guest program its tick timer in the past and freeze.
 PATH="$QEMU_BUILD/subprojects/slirp:$MINGW_BIN:$PATH" exec "$QEMU_BUILD/qemu-system-arm.exe" -M everest -display none -serial "$SERIAL" \
 	-icount shift=auto \
+	-nic "user,model=lan9118,hostfwd=tcp:127.0.0.1:$TELNET_PORT-:23" \
 	"${nand_drives[@]}" \
 	-device loader,file="$PROJECT/extracted/Everest_Kernel/image.bin",addr=$KERNEL_ADDR,force-raw=on \
 	-device loader,addr=$BOOT_STUB_ADDR,cpu-num=0 "$@"
