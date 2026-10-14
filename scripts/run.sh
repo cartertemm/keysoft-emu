@@ -26,7 +26,7 @@ done
 
 # Guest time follows executed instructions. With host-paced time, a slow host
 # disk write can make the guest program its tick timer in the past and freeze.
-PATH="$MINGW_BIN:$PATH" exec "$QEMU_BUILD/qemu-system-arm.exe" -M everest -display none -serial "$SERIAL" \
+PATH="$QEMU_BUILD/subprojects/slirp:$MINGW_BIN:$PATH" exec "$QEMU_BUILD/qemu-system-arm.exe" -M everest -display none -serial "$SERIAL" \
 	-icount shift=auto \
 	"${nand_drives[@]}" \
 	-device loader,file="$PROJECT/extracted/Everest_Kernel/image.bin",addr=$KERNEL_ADDR,force-raw=on \

@@ -16,8 +16,10 @@
 #include "hw/core/qdev-properties-system.h"
 #include "hw/core/sysbus.h"
 #include "hw/misc/unimp.h"
+#include "hw/net/lan9118.h"
 #include "hw/ssi/ssi.h"
 #include "hw/usb/chipidea.h"
+#include "net/net.h"
 #include "qemu/units.h"
 #include "system/address-spaces.h"
 #include "system/block-backend.h"
@@ -38,6 +40,8 @@
 #define EVEREST_NAND_SPACING 0x100
 #define EVEREST_NAND_COUNT 4
 #define EVEREST_USB_ADDR 0x43f88000
+#define EVEREST_LAN_ADDR FSL_IMX31_CS4_ADDR
+#define EVEREST_LAN_IRQ_GPIO1_PIN 4
 #define EVEREST_USB_HOST_COUNT 2
 #define EVEREST_USB_HOST_PRIORITY 1
 
@@ -171,6 +175,21 @@ static const EverestFirmwarePatch everest_firmware_patches[] = {
 	 * license keys of a real unit are in its NOR flash, which is not available.
 	 */
 	{ 0x81ddc534, 0xe1a00004, 0xe3a00000 },
+	/*
+	 * telnetd.dll: the two reads of the "IsEnabled" registry value become
+	 * "mov r0, #1". The shipped registry turns the telnet server off, and it
+	 * is the only way to get a command prompt inside the guest.
+	 */
+	{ 0x813aee14, 0xebfffc58, 0xe3a00001 },
+	{ 0x813af370, 0xebfffb01, 0xe3a00001 },
+	/*
+	 * VASystemServ.dll, device notification thread: "bne loop" becomes
+	 * "bne exit" after WaitForMultipleObjects. Without the license keys the
+	 * service never creates the two events this thread waits on, so the wait
+	 * fails at once and the thread spins, which starves KeySoft's install
+	 * thread. With the patch the thread ends when the wait fails.
+	 */
+	{ 0x8239dc0c, 0x1a000003, 0x1a000002 },
 };
 
 static void everest_reset(MachineState *machine, ResetType type)
@@ -276,6 +295,10 @@ static void everest_init(MachineState *machine)
 	rom_add_blob_fixed("everest.harp-cfg", harp_cfg, sizeof(harp_cfg), EVEREST_HARP_CFG_ADDR);
 	rom_add_blob_fixed("everest.boot-args", &memory_size, sizeof(memory_size),
 			EVEREST_BOOT_ARGS_MEMORY_SIZE_ADDR);
+
+	if (qemu_find_nic_info("lan9118", true, NULL)) {
+		lan9118_init(EVEREST_LAN_ADDR, qdev_get_gpio_in(DEVICE(&s->soc.gpio[0]), EVEREST_LAN_IRQ_GPIO1_PIN));
+	}
 
 	sdma = everest_create_device(s, "imx31.sdma", EVEREST_SDMA_ADDR, EVEREST_SDMA_IRQ);
 	for (i = 0; i < ARRAY_SIZE(everest_ssi); i++) {

@@ -30,5 +30,5 @@ mkdir -p "$QEMU_TREE/build"
 cd "$QEMU_TREE/build"
 [ -f build.ninja ] || ../configure --target-list=arm-softmmu --disable-docs --disable-werror \
 	--disable-tools --disable-guest-agent --disable-gtk --disable-sdl --disable-vnc \
-	--disable-slirp --disable-capstone --disable-libcbor
+	--enable-slirp --disable-capstone --disable-libcbor
 ninja qemu-system-arm.exe
