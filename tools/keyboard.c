@@ -1,14 +1,14 @@
 /*
  * Braille keyboard for the emulated BrailleNote Apex.
  *
- * Reads key presses and releases from this console window and sends them to
- * the key controller of the running emulator over TCP. Chords work because
- * every key is sent down and up separately, like the real keyboard does.
+ * Reads key presses and releases from its window and sends them to the key
+ * controller of the running emulator over TCP. Chords work because every key
+ * is sent down and up separately, like the real keyboard does.
  *
  * Keys: F D S = dots 1 2 3, J K L = dots 4 5 6, Space = space,
  * Backspace = dot 7, Enter = dot 8. Escape quits.
  *
- * Build: gcc -O2 -o keyboard.exe tools/keyboard.c -lws2_32
+ * Build: gcc -O2 -mwindows -o keyboard.exe tools/keyboard.c -lws2_32
  * Usage: keyboard.exe [port]   (default port 5555)
  */
 
@@ -21,6 +21,14 @@
 #define BRAILLE_FIFO 1
 #define RELEASE_FLAG 0x80
 #define KEY_COUNT 256
+#define WINDOW_WIDTH 480
+#define WINDOW_HEIGHT 160
+
+static const char window_class[] = "BrailleKeyboard";
+static const char window_title[] = "Braille Keyboard";
+static const char instructions[] =
+	"F D S J K L are dots 1 to 6, Space is space, Backspace is dot 7, Enter is dot 8.\r\n"
+	"Press Escape to quit.";
 
 typedef struct KeyMapping {
 	WORD virtual_key;
@@ -40,7 +48,11 @@ static const KeyMapping key_map[] = {
 	{ VK_SPACE, 125 },   /* space */
 };
 
-static int find_code(WORD virtual_key)
+static SOCKET sock = INVALID_SOCKET;
+static BOOL held[KEY_COUNT];
+static HWND label;
+
+static int find_code(WPARAM virtual_key)
 {
 	size_t i;
 
@@ -55,79 +67,114 @@ static int find_code(WORD virtual_key)
 static SOCKET connect_to_emulator(int port)
 {
 	struct sockaddr_in address = { 0 };
-	SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-	if (sock == INVALID_SOCKET) {
+	if (s == INVALID_SOCKET) {
 		return INVALID_SOCKET;
 	}
 	address.sin_family = AF_INET;
 	address.sin_port = htons((u_short)port);
 	address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	if (connect(sock, (struct sockaddr *)&address, sizeof(address)) != 0) {
-		closesocket(sock);
+	if (connect(s, (struct sockaddr *)&address, sizeof(address)) != 0) {
+		closesocket(s);
 		return INVALID_SOCKET;
 	}
-	return sock;
+	return s;
 }
 
-static int send_event(SOCKET sock, int code, int released)
+static int send_event(int code, int released)
 {
 	char message[2] = { BRAILLE_FIFO, (char)(code | (released ? RELEASE_FLAG : 0)) };
 
 	return send(sock, message, sizeof(message), 0) == sizeof(message);
 }
 
-int main(int argc, char **argv)
+static void show_error(HWND owner, const char *text)
 {
-	int port = argc > 1 ? atoi(argv[1]) : DEFAULT_PORT;
-	HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
-	BOOL held[KEY_COUNT] = { 0 };
-	WSADATA wsa;
-	SOCKET sock;
+	MessageBoxA(owner, text, window_title, MB_OK | MB_ICONERROR);
+}
 
+static void handle_key(HWND window, WPARAM virtual_key, BOOL down)
+{
+	int code;
+
+	if (virtual_key == VK_ESCAPE) {
+		DestroyWindow(window);
+		return;
+	}
+	code = find_code(virtual_key);
+	if (code < 0 || virtual_key >= KEY_COUNT) {
+		return;
+	}
+	/* Held keys repeat their key-down event; send only the first one. */
+	if (down == held[virtual_key]) {
+		return;
+	}
+	held[virtual_key] = down;
+	if (!send_event(code, !down)) {
+		show_error(window, "The emulator closed the connection.");
+		DestroyWindow(window);
+	}
+}
+
+static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	switch (message) {
+	case WM_CREATE:
+		label = CreateWindowA("STATIC", instructions, WS_CHILD | WS_VISIBLE,
+			0, 0, 0, 0, window, NULL, ((CREATESTRUCT *)lparam)->hInstance, NULL);
+		SendMessageA(label, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), FALSE);
+		return 0;
+	case WM_SIZE:
+		MoveWindow(label, 0, 0, LOWORD(lparam), HIWORD(lparam), TRUE);
+		return 0;
+	case WM_KEYDOWN:
+		handle_key(window, wparam, TRUE);
+		return 0;
+	case WM_KEYUP:
+		handle_key(window, wparam, FALSE);
+		return 0;
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+	}
+	return DefWindowProcA(window, message, wparam, lparam);
+}
+
+int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, int show)
+{
+	int port = *command_line ? atoi(command_line) : DEFAULT_PORT;
+	char error[128];
+	WNDCLASSA wc = { 0 };
+	WSADATA wsa;
+	HWND window;
+	MSG msg;
+
+	(void)previous;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-		fprintf(stderr, "Could not start Windows networking.\n");
+		show_error(NULL, "Could not start Windows networking.");
 		return 1;
 	}
 	sock = connect_to_emulator(port);
 	if (sock == INVALID_SOCKET) {
-		fprintf(stderr, "Could not connect to the emulator on port %d. Is it running?\n", port);
+		snprintf(error, sizeof(error), "Could not connect to the emulator on port %d. Is it running?", port);
+		show_error(NULL, error);
 		WSACleanup();
 		return 1;
 	}
-	SetConsoleMode(input, ENABLE_WINDOW_INPUT);
-	printf("Connected. F D S J K L are dots 1 to 6, Space is space, Backspace is dot 7, Enter is dot 8.\n");
-	printf("Press Escape to quit.\n");
 
-	for (;;) {
-		INPUT_RECORD record;
-		DWORD count;
-		KEY_EVENT_RECORD *key;
-		int code;
+	wc.lpfnWndProc = window_proc;
+	wc.hInstance = instance;
+	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+	wc.lpszClassName = window_class;
+	RegisterClassA(&wc);
+	window = CreateWindowA(window_class, window_title, WS_OVERLAPPEDWINDOW,
+		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT, NULL, NULL, instance, NULL);
+	ShowWindow(window, show);
 
-		if (!ReadConsoleInput(input, &record, 1, &count) || count == 0) {
-			break;
-		}
-		if (record.EventType != KEY_EVENT) {
-			continue;
-		}
-		key = &record.Event.KeyEvent;
-		if (key->wVirtualKeyCode == VK_ESCAPE) {
-			break;
-		}
-		code = find_code(key->wVirtualKeyCode);
-		if (code < 0 || key->wVirtualKeyCode >= KEY_COUNT) {
-			continue;
-		}
-		/* Held keys repeat their key-down event; send only the first one. */
-		if (key->bKeyDown == held[key->wVirtualKeyCode]) {
-			continue;
-		}
-		held[key->wVirtualKeyCode] = key->bKeyDown;
-		if (!send_event(sock, code, !key->bKeyDown)) {
-			fprintf(stderr, "The emulator closed the connection.\n");
-			break;
-		}
+	while (GetMessageA(&msg, NULL, 0, 0) > 0) {
+		DispatchMessageA(&msg);
 	}
 	closesocket(sock);
 	WSACleanup();
