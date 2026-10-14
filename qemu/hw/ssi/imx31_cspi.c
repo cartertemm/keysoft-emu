@@ -50,7 +50,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(IMX31CSPIState, IMX31_CSPI)
 #define CSPI_STATREG_RF BIT(5)
 #define CSPI_STATREG_RO BIT(6)
 #define CSPI_STATREG_BO BIT(7)
-#define CSPI_STATREG_W1C (CSPI_STATREG_RO | CSPI_STATREG_BO)
+#define CSPI_STATREG_TC BIT(8)
+#define CSPI_STATREG_W1C (CSPI_STATREG_RO | CSPI_STATREG_BO | CSPI_STATREG_TC)
 
 struct IMX31CSPIState {
 	SysBusDevice parent_obj;
@@ -66,6 +67,7 @@ struct IMX31CSPIState {
 	uint32_t periodreg;
 	uint32_t testreg;
 	uint32_t sticky_status;
+	bool burst;
 	Fifo32 tx_fifo;
 	Fifo32 rx_fifo;
 };
@@ -132,6 +134,7 @@ static void imx31_cspi_exchange(IMX31CSPIState *s)
 	}
 	imx31_cspi_set_cs(s, false);
 	s->conreg &= ~CSPI_CONREG_XCH;
+	s->sticky_status |= CSPI_STATREG_TC;
 }
 
 static bool imx31_cspi_is_active_master(IMX31CSPIState *s)
@@ -151,6 +154,7 @@ static void imx31_cspi_reset(DeviceState *dev)
 	s->periodreg = 0;
 	s->testreg = 0;
 	s->sticky_status = 0;
+	s->burst = false;
 	fifo32_reset(&s->tx_fifo);
 	fifo32_reset(&s->rx_fifo);
 	imx31_cspi_update_irq(s);
@@ -204,18 +208,21 @@ static void imx31_cspi_write(void *opaque, hwaddr offset, uint64_t value, unsign
 			break;
 		}
 		fifo32_push(&s->tx_fifo, value);
-		if ((s->conreg & CSPI_CONREG_SMC) && imx31_cspi_is_active_master(s)) {
+		if (((s->conreg & CSPI_CONREG_SMC) || s->burst) && imx31_cspi_is_active_master(s)) {
 			imx31_cspi_exchange(s);
 		}
 		break;
 	case CSPI_CONREG:
 		s->conreg = value;
+		s->burst = false;
 		if (!(value & CSPI_CONREG_EN)) {
 			fifo32_reset(&s->tx_fifo);
 			fifo32_reset(&s->rx_fifo);
 			s->sticky_status = 0;
 			s->conreg &= ~CSPI_CONREG_XCH;
 		} else if ((value & CSPI_CONREG_XCH) && imx31_cspi_is_active_master(s)) {
+			/* Words written while the exchange runs go out in the same burst. */
+			s->burst = true;
 			imx31_cspi_exchange(s);
 		}
 		break;
