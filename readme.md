@@ -92,11 +92,11 @@ The first boot creates four persistent NAND images in `state`. Later runs reuse 
 
 ### Making a release
 
-1. Change the version number in the `VERSION` file.
+1. Change the version number in the `VERSION` file (in the root of this repository).
 2. From the MINGW64 shell, run `bash scripts/build_release.sh`. This writes `dist/keysoft-emu-<version>.zip`.
 3. Upload the zip to the Releases page.
 
-`start-emu.exe` shows the version when it starts. To show only the version, run `start-emu.exe --version` (or `-v`).
+`start-emu.exe` will always show the version when it starts. To show only the version number and exit, run `start-emu.exe --version` (or `-v`).
 
 ## Keyboard
 
@@ -108,11 +108,11 @@ Type on the Apex braille keyboard with these PC keys. The keyboard window must h
 | J, K, L | Dots 4, 5, 6 |
 | Backspace | Dot 7 (Backspace) |
 | Enter | Dot 8 (Enter) |
-| Space or Alt | Space |
+| Space or Left/Right Alt | Space |
 | F12 | Power switch (off and on) |
 | Escape | Close the keyboard window |
 
-Press keys together for chords, the same as on the real keyboard. Most PC keyboards can only detect six letter keys at the same time, so a chord of space with all six dots can lose a key. Use Alt for space in large chords, because Alt does not count toward that limit.
+Press keys together for chords, the same as on the real keyboard. Most PC keyboards can only detect six letter keys at the same time, meaning that going to the main menu (a chord of space with all six dots) might lose a key. To get around this, you can hold the left or right alt key in place of space.
 
 ## How it works (the nerdy stuff)
 
@@ -134,3 +134,5 @@ Almost everything works, with some notable exceptions:
 2. USB devices and removable storage are not supported.
 3. VGA display output is not supported.
 4. The FM radio is not supported.
+
+If you think they should be, or you discover something else that doesn't work quite right, please open an issue to signal interest and I will look into it as time allows.
