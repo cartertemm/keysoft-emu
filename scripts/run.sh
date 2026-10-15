@@ -1,12 +1,12 @@
 #!/bin/bash
 # Boot the extracted Apex kernel on the Everest board. Extra arguments go to QEMU.
-# Usage (Git Bash or MSYS2): scripts/run.sh [qemu arguments]
+# Usage (MSYS2 MINGW64 shell): scripts/run.sh [qemu arguments]
 set -euo pipefail
 
 PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
-QEMU_BUILD="${QEMU_BUILD:-/c/Users/cartertemm/qemu-everest/qemu/build}"
-MINGW_BIN="${MINGW_BIN:-/c/Users/cartertemm/scoop/apps/msys2/current/mingw64/bin}"
-QEMU_IMG="${QEMU_IMG:-/c/Users/cartertemm/scoop/apps/qemu/current/qemu-img.exe}"
+QEMU_BUILD="${QEMU_BUILD:-$HOME/qemu-everest/qemu/build}"
+MINGW_BIN="${MINGW_BIN:-/mingw64/bin}"
+QEMU_IMG="${QEMU_IMG:-$(command -v qemu-img || echo "/c/Program Files/qemu/qemu-img.exe")}"
 STATE_DIR="${STATE_DIR:-$PROJECT/state}"
 SERIAL="${SERIAL:-stdio}"
 # The guest's telnet server is reachable on this host port.

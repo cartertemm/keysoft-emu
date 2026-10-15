@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copy the Everest device models into a QEMU source tree and build qemu-system-arm.
-# Run inside an MSYS2 MINGW64 shell: scripts/build_qemu.sh /c/Users/cartertemm/qemu-everest/qemu
+# Run inside an MSYS2 MINGW64 shell: scripts/build_qemu.sh ~/qemu-everest/qemu
 set -euo pipefail
 
 QEMU_TREE="$1"

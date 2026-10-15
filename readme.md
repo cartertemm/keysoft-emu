@@ -12,22 +12,34 @@ This project is not affiliated with or endorsed by HumanWare. HumanWare, Braille
 
 ## Getting started
 
-You will need Windows, Python 3, an MSYS2 MINGW64 build environment, QEMU 11.1.0 source code, and a legally obtained KeySoft 9.5.1 update file. The firmware is not included in this repository.
+You will need:
 
-First, use 7 Zip to extract the update file into a folder named `firmware`. If you don't have 7 Zip, you can use the built in Windows expansion tool instead:
+* Windows
+* Python 3
+* [MSYS2](https://www.msys2.org/)
+* [QEMU for Windows](https://qemu.weilnetz.de/w64/), for the `qemu-img` tool. The QEMU build below does not include it.
+* A legally obtained KeySoft 9.5.1 update file (`KeySoft 9 5 1 Build 1285.hwi`)
+
+Put the update file in the root of this repository. Then use 7 Zip to extract it into a folder named `firmware`. If you don't have 7 Zip, you can use the built in Windows expansion tool instead. From PowerShell in the repository root:
 
 ```powershell
 mkdir firmware
-expand.exe .\KeySoft-9.5.1.hwi -F:* .\firmware
+expand.exe ".\KeySoft 9 5 1 Build 1285.hwi" -F:* .\firmware
 ```
 
 Extract the Windows CE images from the unpacked update:
 
 ```powershell
-py .\scripts\extract_firmware.py .\firmware .\extracted
+python .\scripts\extract_firmware.py .\firmware .\extracted
 ```
 
-Next, open an MSYS2 MINGW64 shell. Clone QEMU, apply the custom device models, and build it:
+Next, open an MSYS2 MINGW64 shell. Install the build tools:
+
+```bash
+pacman -S --needed git mingw-w64-x86_64-gcc mingw-w64-x86_64-ninja mingw-w64-x86_64-glib2 mingw-w64-x86_64-pixman mingw-w64-x86_64-pkgconf mingw-w64-x86_64-python
+```
+
+Go to the repository root (for example, `cd /c/path/to/keysoft-emu`). Clone QEMU, apply the custom device models, and build it. Then build the keyboard tool:
 
 ```bash
 mkdir -p ~/qemu-everest
@@ -36,19 +48,18 @@ bash scripts/build_qemu.sh ~/qemu-everest/qemu
 gcc -O2 -mwindows -o tools/keyboard.exe tools/keyboard.c -lws2_32
 ```
 
-From PowerShell or Command Prompt, start the emulator through MSYS2:
+In MSYS2, `~` is your MSYS2 home folder (for example, `C:\msys64\home\yourname`), not your Windows user folder.
 
-```powershell
-msys2 scripts/run.sh
-```
-
-This uses the paths configured near the top of `scripts/run.sh`. If your QEMU or MSYS2 installation is elsewhere, open an MSYS2 shell and override them when starting the emulator:
+Start the emulator from the same MINGW64 shell, in the repository root:
 
 ```bash
-QEMU_BUILD=~/qemu-everest/qemu/build \
-QEMU_IMG=/c/path/to/qemu-img.exe \
-MINGW_BIN=/mingw64/bin \
 bash scripts/run.sh
+```
+
+By default, `run.sh` looks for QEMU in `~/qemu-everest/qemu/build` and for `qemu-img` on your PATH or in `C:\Program Files\qemu`. If yours are somewhere else, set these variables when you start the emulator:
+
+```bash
+QEMU_BUILD=/c/path/to/qemu/build QEMU_IMG=/c/path/to/qemu-img.exe bash scripts/run.sh
 ```
 
 Open another terminal and run `tools/keyboard.exe` for braille keyboard input. The emulator also forwards the guest Telnet server to `localhost:2323`.
