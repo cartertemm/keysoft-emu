@@ -29,6 +29,7 @@
 #define KEY_COUNT 256
 #define WINDOW_WIDTH 480
 #define WINDOW_HEIGHT 160
+#define INSTANCE_MUTEX "Local\\keysoft-emu-keyboard"
 
 static const char window_class[] = "BrailleKeyboard";
 static const char window_title[] = "Braille Keyboard";
@@ -195,6 +196,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
 	MSG msg;
 
 	(void)previous;
+	if (CreateMutexA(NULL, TRUE, INSTANCE_MUTEX) && GetLastError() == ERROR_ALREADY_EXISTS) {
+		window = FindWindowA(window_class, NULL);
+		if (window) {
+			SetForegroundWindow(window);
+		}
+		return 0;
+	}
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
 		show_error(NULL, "Could not start Windows networking.");
 		return 1;

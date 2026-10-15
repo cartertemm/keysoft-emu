@@ -44,6 +44,7 @@
 #define KEYS_POLL_MS 250
 #define COMMAND_SIZE 4096
 #define PATH_SIZE (2 * MAX_PATH)
+#define INSTANCE_MUTEX "Local\\keysoft-emu-start-emu"
 #define IMAGE_NAME_CHARS "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
 
 static const char kernel_image[] = "extracted\\Everest_Kernel\\image.bin";
@@ -452,6 +453,9 @@ int main(int argc, char **argv)
 	printf("keysoft-emu %s\n", VERSION);
 	if (argc > 1 && (!strcmp(argv[1], "-v") || !strcmp(argv[1], "--version"))) {
 		return 0;
+	}
+	if (CreateMutexA(NULL, TRUE, INSTANCE_MUTEX) && GetLastError() == ERROR_ALREADY_EXISTS) {
+		fail(FALSE, "start-emu is already running. Make sure that the previous process was fully closed by pressing control+c on the open console window.");
 	}
 	GetModuleFileNameA(NULL, folder, sizeof(folder));
 	*strrchr(folder, '\\') = 0;
