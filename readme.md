@@ -8,7 +8,7 @@ I and many others grew up using the BrailleNote MPower, PK, and later the Apex. 
 
 This emulator was built for the purposes of nostalgia, and to see how far I could go. It was not built to rip off HumanWare or redistribute their technology. It runs the original KeySoft 9.5 update files (version 9.5.0, which HumanWare had on their website before they shelved the product, and the later version 9.5.1). This repository does not include those files, the ROM, or any other part of the firmware.
 
-This project is not affiliated with or endorsed by HumanWare. HumanWare, BrailleNote, and KeySoft are trademarks of their owners and are used here only to describe the original product. The emulator is for preservation and personal use. It is free, and I don't accept money for it in any form, including donations and ads.
+This project is not affiliated with or endorsed by HumanWare. HumanWare, BrailleNote, and KeySoft are trademarks of their owners and are used here only to describe the original product. The emulator is for preservation and personal use. It is free, and I don't accept money for it in any form, including donations and ads. It should go without saying, but do not bug Humanware about the issues that you have with this project. They cannot and will not help you.
 
 ## Getting started
 
@@ -76,6 +76,22 @@ QEMU_BUILD=/c/path/to/qemu/build QEMU_IMG=/c/path/to/qemu-img.exe bash scripts/r
 Open another terminal and run `tools/keyboard.exe` for braille keyboard input. The emulator also forwards the guest Telnet server to `localhost:2323`.
 
 The first boot creates four persistent NAND images in `state`. Later runs reuse them.
+
+## Keyboard
+
+Type on the Apex braille keyboard with these PC keys. The keyboard window must have focus.
+
+| PC key | Apex key |
+| --- | --- |
+| F, D, S | Dots 1, 2, 3 |
+| J, K, L | Dots 4, 5, 6 |
+| Backspace | Dot 7 (Backspace) |
+| Enter | Dot 8 (Enter) |
+| Space or Alt | Space |
+| F12 | Power switch (off and on) |
+| Escape | Close the keyboard window |
+
+Press keys together for chords, the same as on the real keyboard. Most PC keyboards can only detect six letter keys at the same time, so a chord of space with all six dots can lose a key. Use Alt for space in large chords, because Alt does not count toward that limit.
 
 ## How it works (the nerdy stuff)
 
