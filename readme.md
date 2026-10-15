@@ -6,7 +6,7 @@ Released in late 2009, the BrailleNote Apex became one of the most widely adopte
 
 I and many others grew up using the BrailleNote MPower, PK, and later the Apex. The Apex specifically was my computer before I cared about a computer, and what I believe to be a huge driver of my present interest in technology. The last unit I had is now sadly stuck in a boot loop at the bottom of a box in a closet in my home office. So I wanted to see how closely its hardware could be reproduced in software.
 
-This emulator was built for the purposes of nostalgia, and to see how far I could go. It was not built to rip off HumanWare or redistribute their technology. It runs the last update ever released for KeySoft (version 9.5.1), the same .hwi file that HumanWare had on their website before they shelved the product. This repository does not include that file, the ROM, or any other part of the firmware.
+This emulator was built for the purposes of nostalgia, and to see how far I could go. It was not built to rip off HumanWare or redistribute their technology. It runs the original KeySoft 9.5 update files (version 9.5.0, which HumanWare had on their website before they shelved the product, and the later version 9.5.1). This repository does not include those files, the ROM, or any other part of the firmware.
 
 This project is not affiliated with or endorsed by HumanWare. HumanWare, BrailleNote, and KeySoft are trademarks of their owners and are used here only to describe the original product. The emulator is for preservation and personal use. It is free, and I don't accept money for it in any form, including donations and ads.
 
@@ -18,13 +18,24 @@ You will need:
 * Python 3
 * [MSYS2](https://www.msys2.org/)
 * [QEMU for Windows](https://qemu.weilnetz.de/w64/), for the `qemu-img` tool. The QEMU build below does not include it.
-* A legally obtained KeySoft 9.5.1 update file (`KeySoft 9 5 1 Build 1285.hwi`)
+* A legally obtained KeySoft 9.5 update file. Either of these works:
+  * `KeySoft 9 5 0 Build 1280.hwi`, from HumanWare's [archived KeySoft 9.5 download page](https://web.archive.org/web/20210510082627/https://support.humanware.com/en-international/support/braillenote_apex/software/keysoft_95). This file belongs to HumanWare.
+  * `KeySoft 9 5 1 Build 1285.hwi`, if you have it. As far as I know, no public copy exists.
 
-Put the update file in the root of this repository. Then use 7 Zip to extract it into a folder named `firmware`. If you don't have 7 Zip, you can use the built in Windows expansion tool instead. From PowerShell in the repository root:
+To make sure you have the right file, compare its SHA-256 hash. In PowerShell, run `Get-FileHash` on the file.
+
+| File | SHA-256 |
+| --- | --- |
+| `KeySoft 9 5 0 Build 1280.hwi` | `25d38528222e7a94e78fa605558c59ac520dbe1bff49dcd435019789d6b248f6` |
+| `KeySoft 9 5 1 Build 1285.hwi` | `d387d8ebe15a7b284883b6c398e2e02f199899b7eb3a519a3b11c363e3bb1269` |
+
+The correct file is about 64 MB. The Internet Archive sends it compressed. A web browser unpacks it for you, but if you download it with `curl`, add `--compressed`.
+
+Put the update file in the root of this repository. Then use 7 Zip to extract it into a folder named `firmware`. If you don't have 7 Zip, you can use the built in Windows expansion tool instead. From PowerShell in the repository root (use your file's name):
 
 ```powershell
 mkdir firmware
-expand.exe ".\KeySoft 9 5 1 Build 1285.hwi" -F:* .\firmware
+expand.exe ".\KeySoft 9 5 0 Build 1280.hwi" -F:* .\firmware
 ```
 
 Extract the Windows CE images from the unpacked update:
