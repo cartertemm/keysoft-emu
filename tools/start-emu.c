@@ -444,6 +444,7 @@ int main(void)
 	DWORD exit_code = 1;
 	const char *problem;
 
+	setvbuf(stdout, NULL, _IONBF, 0);
 	GetModuleFileNameA(NULL, folder, sizeof(folder));
 	*strrchr(folder, '\\') = 0;
 	SetCurrentDirectoryA(folder);
