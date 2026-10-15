@@ -21,7 +21,7 @@ You will need:
 * [MSYS2](https://www.msys2.org/)
 * [QEMU for Windows](https://qemu.weilnetz.de/w64/), for the `qemu-img` tool. The QEMU build below does not include it.
 * A legally obtained KeySoft 9.5 update file. Either of these works:
-  * `KeySoft 9 5 0 Build 1280.hwi`, from HumanWare's [archived KeySoft 9.5 download page](https://web.archive.org/web/20210510082627/https://support.humanware.com/en-international/support/braillenote_apex/software/keysoft_95). This file belongs to HumanWare.
+  * `KeySoft 9 5 0 Build 1280.hwi`, from HumanWare's support site on the [Internet Archive](https://web.archive.org/web/20210510082627/https://support.humanware.com/en-international/support/braillenote_apex/software/keysoft_95). This file belongs to HumanWare.
   * `KeySoft 9 5 1 Build 1285.hwi`, if you have it. As far as I know, no public copy exists.
 
 To make sure you have the right file, compare its SHA-256 hash. In PowerShell, run `Get-FileHash` on the file.
