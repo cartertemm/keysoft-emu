@@ -6,7 +6,7 @@
  * is sent down and up separately, like the real keyboard does.
  *
  * Keys: F D S = dots 1 2 3, J K L = dots 4 5 6, Space or Alt = space,
- * Backspace = dot 7, Enter = dot 8. F12 flips the power switch off and on.
+ * A or Backspace = dot 7, ; or Enter = dot 8. F12 flips the power switch off and on.
  * Escape quits.
  *
  * Most PC keyboards report only 6 normal keys at once, so space with all six
@@ -34,7 +34,7 @@
 static const char window_class[] = "BrailleKeyboard";
 static const char window_title[] = "Braille Keyboard";
 static const char instructions[] =
-	"F D S J K L are dots 1 to 6, Space or Alt is space, Backspace is dot 7, Enter is dot 8.\r\n"
+	"F D S J K L are dots 1 to 6, Space or Alt is space, A or Backspace is dot 7, ; or Enter is dot 8.\r\n"
 	"F12 turns the power switch off or on again. Switch off before you close the emulator.\r\n"
 	"Press Escape to quit.";
 
@@ -51,7 +51,9 @@ static const KeyMapping key_map[] = {
 	{ 'J', 22 },         /* dot 4 */
 	{ 'K', 21 },         /* dot 5 */
 	{ 'L', 20 },         /* dot 6 */
+	{ 'A', 28 },         /* dot 7 */
 	{ VK_BACK, 28 },     /* dot 7 */
+	{ VK_OEM_1, 19 },    /* dot 8, the ; key */
 	{ VK_RETURN, 19 },   /* dot 8 */
 	{ VK_SPACE, 125 },   /* space */
 	{ VK_MENU, 125 },    /* space, either Alt key */

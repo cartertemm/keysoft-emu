@@ -129,8 +129,8 @@ Type on the Apex braille keyboard with these PC keys. The keyboard window must h
 | --- | --- |
 | F, D, S | Dots 1, 2, 3 |
 | J, K, L | Dots 4, 5, 6 |
-| Backspace | Dot 7 (Backspace) |
-| Enter | Dot 8 (Enter) |
+| A or Backspace | Dot 7 (Backspace) |
+| ; or Enter | Dot 8 (Enter) |
 | Space or Left/Right Alt | Space |
 | F12 | Power switch (off and on) |
 | Escape | Close the keyboard window |
