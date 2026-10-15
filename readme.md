@@ -1,18 +1,18 @@
 # KeySoft Emulator
 
-This project recreates KeySoft 9.5.1 from the HumanWare BrailleNote Apex and runs the original Windows CE software on a modern Windows computer.
+This project recreates KeySoft 9.5.1 from the HumanWare BrailleNote Apex and runs the original Windows CE software on a modern Windows computer. Almost everything in the original KeySoft experience works, including speech, networking, persistent storage, and braille keyboard input.
 
-Released in late 2009, the BrailleNote Apex became one of the most widely adopted electronic braille notetakers in educational systems (K-12 and universities) and workplace accessibility programs throughout the 2010s. Support for the BrailleNote Apex has officially been discontinued.
+Released in late 2009, the BrailleNote Apex became one of the most widely adopted electronic braille notetakers in educational systems (K-12 and universities) and workplace accessibility programs throughout the 2010s. It remained a primary flagship device for HumanWare for roughly seven years until the introduction of the Android-based BrailleNote Touch in 2016. Support for the BrailleNote Apex has officially been discontinued.
 
 I and many others grew up using the BrailleNote MPower, PK, and later the Apex. The Apex specifically was my computer before I cared about a computer, and what I believe to be a huge driver of my present interest in technology. The last unit I had is now sadly stuck in a boot loop at the bottom of a box in a closet in my home office. So I wanted to see how closely its hardware could be reproduced in software.
 
-This emulator was built for the purposes of nostalgia, and to see how far I could go. It was not built to rip off HumanWare or redistribute their technology. Almost everything in the original KeySoft experience works, including speech, networking, persistent storage, and braille keyboard input.
+This emulator was built for the purposes of nostalgia, and to see how far I could go. It was not built to rip off HumanWare or redistribute their technology. I have provided the last update ever released to Keysoft (version 9.5), the same .hwi file that Humanware had on their website prior to fully shelving the product. I have not provided the ROM or the firmware or anything that didn't originally come with the product. In short, don't sue me.
 
 ## Getting started
 
 You will need Windows, Python 3, an MSYS2 MINGW64 build environment, QEMU 11.1.0 source code, and a legally obtained KeySoft 9.5.1 update file. The firmware is not included in this repository.
 
-First, use 7 Zip to extract the update file into a folder named `firmware`. You can use the built in Windows expansion tool instead:
+First, use 7 Zip to extract the update file into a folder named `firmware`. If you don't have 7 Zip, you can use the built in Windows expansion tool instead:
 
 ```powershell
 mkdir firmware
