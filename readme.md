@@ -2,6 +2,8 @@
 
 This project recreates KeySoft 9.5.1 from the HumanWare BrailleNote Apex and runs the original Windows CE software on a modern Windows computer. Almost everything in the original KeySoft experience works, including speech, networking, persistent storage, and braille keyboard input.
 
+[Listen to a demo (MP3, 11 MB)](https://ctemm.me/files/keysoft-emu-demo.mp3)
+
 Released in late 2009, the BrailleNote Apex became one of the most widely adopted electronic braille notetakers in educational systems (K-12 and universities) and workplace accessibility programs throughout the 2010s. It remained a primary flagship device for HumanWare for roughly seven years until the introduction of the Android-based BrailleNote Touch in 2016. Support for the BrailleNote Apex has officially been discontinued.
 
 I and many others grew up using the BrailleNote MPower, PK, and later the Apex. The Apex specifically was my computer before I cared about a computer, and what I believe to be a huge driver of my present interest in technology. The last unit I had is now sadly stuck in a boot loop at the bottom of a box in a closet in my home office. So I wanted to see how closely its hardware could be reproduced in software.
