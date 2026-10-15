@@ -234,6 +234,10 @@ static void imx31_cspi_write(void *opaque, hwaddr offset, uint64_t value, unsign
 		break;
 	case CSPI_STATREG:
 		s->sticky_status &= ~(value & CSPI_STATREG_W1C);
+		/* Clearing the transfer complete flag means the guest saw the burst end. */
+		if (value & CSPI_STATREG_TC) {
+			s->burst = false;
+		}
 		break;
 	case CSPI_PERIODREG:
 		s->periodreg = value;

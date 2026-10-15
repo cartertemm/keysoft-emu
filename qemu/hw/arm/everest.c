@@ -36,6 +36,17 @@
 #define EVEREST_PMIC_CS 1
 #define EVEREST_PMIC_IRQ_GPIO1_PIN 2
 
+/*
+ * Start of the NOR flash. It holds the FPGA image that the kernel loads into
+ * the FPGA again when the unit wakes. The run script loads the image.
+ */
+#define EVEREST_NOR_SIZE (1 * MiB)
+
+/* A configured FPGA holds its INIT_B and DONE pins high. */
+#define EVEREST_FPGA_GPIO 2
+#define EVEREST_FPGA_DONE_PIN 4
+#define EVEREST_FPGA_INIT_B_PIN 6
+
 #define EVEREST_IOMUXC_ADDR 0x43fac000
 #define EVEREST_IOMUXC_SIZE 0x4000
 #define EVEREST_NAND_ADDR (FSL_IMX31_FLASH1_ADDR + 0x400)
@@ -58,6 +69,7 @@
 #define EVEREST_BOOT_STUB_ADDR 0x80010000
 #define EVEREST_KERNEL_ENTRY 0x80200000
 #define EVEREST_BOOT_ARGS_MEMORY_SIZE_ADDR 0x80002094
+#define EVEREST_BOOT_ARGS_CLOCK_FREQ_ADDR 0x80000044
 
 #define EVEREST_HARP_CFG_ADDR 0x80000094
 #define EVEREST_HARP_CFG_SIZE 0x800
@@ -97,6 +109,33 @@ static const EverestCfgField everest_harp_cfg[] = {
 	{ 0x7c, 4, EVEREST_NAND_LICENSES_MB },
 };
 
+/*
+ * Clock rates in Hz, by CSPDDK clock signal number, that eboot computes from
+ * the clock controller setup that it and the kernel program. Drivers divide
+ * by these, so a zero rate crashes them.
+ */
+static const uint32_t everest_clock_freq[] = {
+	399000000, /* MCU PLL */
+	240000000, /* USB PLL */
+	220147200, /* serial PLL */
+	399000000, /* ARM */
+	199500000, /* HSP */
+	99750000,  /* AHB */
+	49875000,  /* IPG */
+	24937500,  /* NAND flash */
+	49875000,  /* AHB / 2 */
+	1719900,   /* SSI1 */
+	1719900,   /* SSI2 */
+	1875000,   /* FIRI */
+	429975,    /* CSI */
+	60000000,  /* USB */
+	49875000,  /* PER */
+	49875000,  /* PER, used by the UARTs */
+	1,
+	1,
+	0,
+};
+
 static const uint32_t everest_boot_stub[] = {
 	0xe3a0060f, /* mov r0, #0x00f00000 */
 	0xee010f50, /* mcr p15, 0, r0, c1, c0, 2 (enable VFP coprocessor access) */
@@ -108,6 +147,7 @@ typedef struct EverestState {
 	FslIMX31State soc;
 	DeviceState *cspi[EVEREST_CSPI_COUNT];
 	MemoryRegion iomuxc;
+	MemoryRegion nor;
 } EverestState;
 
 static const struct {
@@ -151,6 +191,11 @@ static const struct {
 	{ 0x43fb0000, 46 },
 	{ 0x43fb4000, 47 },
 };
+
+/* UART4 talks to the Bluetooth chip and sends through SDMA. */
+#define EVEREST_BLUETOOTH_UART 1
+#define EVEREST_BLUETOOTH_UART_TX_DMA_EVENT 13
+#define EVEREST_UART_TX_DMA_REQUEST 1
 
 static const struct {
 	hwaddr addr;
@@ -200,9 +245,13 @@ static const EverestFirmwarePatch everest_firmware_patches[] = {
 
 static void everest_reset(MachineState *machine, ResetType type)
 {
+	FslIMX31State *soc = FSL_IMX31(object_resolve_path_component(OBJECT(machine), "soc"));
+	DeviceState *fpga_gpio = DEVICE(&soc->gpio[EVEREST_FPGA_GPIO]);
 	int i;
 
 	qemu_devices_reset(type);
+	qemu_set_irq(qdev_get_gpio_in(fpga_gpio, EVEREST_FPGA_DONE_PIN), 1);
+	qemu_set_irq(qdev_get_gpio_in(fpga_gpio, EVEREST_FPGA_INIT_B_PIN), 1);
 	for (i = 0; i < ARRAY_SIZE(everest_firmware_patches); i++) {
 		const EverestFirmwarePatch *patch = &everest_firmware_patches[i];
 		uint32_t word = 0;
@@ -233,8 +282,10 @@ static void everest_init(MachineState *machine)
 	DeviceState *usb;
 	DeviceState *sdma;
 	DeviceState *keys;
+	DeviceState *uart[ARRAY_SIZE(everest_uart)];
 	DriveInfo *nand_drive;
 	uint32_t boot_stub[ARRAY_SIZE(everest_boot_stub)];
+	uint32_t clock_freq[ARRAY_SIZE(everest_clock_freq)];
 	uint8_t harp_cfg[EVEREST_HARP_CFG_SIZE] = { 0 };
 	uint32_t memory_size = cpu_to_le32(machine->ram_size);
 	int i;
@@ -253,12 +304,11 @@ static void everest_init(MachineState *machine)
 		everest_create_device(s, everest_devices[i].type, everest_devices[i].addr, everest_devices[i].irq);
 	}
 	for (i = 0; i < ARRAY_SIZE(everest_uart); i++) {
-		DeviceState *uart = qdev_new(TYPE_IMX_SERIAL);
-
-		qdev_prop_set_chr(uart, "chardev", serial_hd(EVEREST_FIRST_BOARD_SERIAL + i));
-		sysbus_realize_and_unref(SYS_BUS_DEVICE(uart), &error_fatal);
-		sysbus_mmio_map(SYS_BUS_DEVICE(uart), 0, everest_uart[i].addr);
-		sysbus_connect_irq(SYS_BUS_DEVICE(uart), 0,
+		uart[i] = qdev_new(TYPE_IMX_SERIAL);
+		qdev_prop_set_chr(uart[i], "chardev", serial_hd(EVEREST_FIRST_BOARD_SERIAL + i));
+		sysbus_realize_and_unref(SYS_BUS_DEVICE(uart[i]), &error_fatal);
+		sysbus_mmio_map(SYS_BUS_DEVICE(uart[i]), 0, everest_uart[i].addr);
+		sysbus_connect_irq(SYS_BUS_DEVICE(uart[i]), 0,
 				qdev_get_gpio_in(DEVICE(&s->soc.avic), everest_uart[i].irq));
 	}
 
@@ -283,6 +333,9 @@ static void everest_init(MachineState *machine)
 				qdev_get_gpio_in(DEVICE(&s->soc.avic), everest_usb_host[i].irq));
 	}
 
+	memory_region_init_rom(&s->nor, NULL, "everest.nor", EVEREST_NOR_SIZE, &error_fatal);
+	memory_region_add_subregion(get_system_memory(), FSL_IMX31_FLASH0_ADDR, &s->nor);
+
 	/* The pin multiplexer only stores its configuration. */
 	memory_region_init_ram(&s->iomuxc, NULL, "everest.iomuxc", EVEREST_IOMUXC_SIZE, &error_fatal);
 	memory_region_add_subregion(get_system_memory(), EVEREST_IOMUXC_ADDR, &s->iomuxc);
@@ -303,6 +356,11 @@ static void everest_init(MachineState *machine)
 	rom_add_blob_fixed("everest.harp-cfg", harp_cfg, sizeof(harp_cfg), EVEREST_HARP_CFG_ADDR);
 	rom_add_blob_fixed("everest.boot-args", &memory_size, sizeof(memory_size),
 			EVEREST_BOOT_ARGS_MEMORY_SIZE_ADDR);
+	for (i = 0; i < ARRAY_SIZE(everest_clock_freq); i++) {
+		clock_freq[i] = cpu_to_le32(everest_clock_freq[i]);
+	}
+	rom_add_blob_fixed("everest.clock-freq", clock_freq, sizeof(clock_freq),
+			EVEREST_BOOT_ARGS_CLOCK_FREQ_ADDR);
 
 	if (qemu_find_nic_info("lan9118", true, NULL)) {
 		lan9118_init(EVEREST_LAN_ADDR, qdev_get_gpio_in(DEVICE(&s->soc.gpio[0]), EVEREST_LAN_IRQ_GPIO1_PIN));
@@ -316,6 +374,8 @@ static void everest_init(MachineState *machine)
 	qdev_connect_gpio_out_named(keys, "power-off", 0, qdev_get_gpio_in_named(pmic, "power-off", 0));
 
 	sdma = everest_create_device(s, "imx31.sdma", EVEREST_SDMA_ADDR, EVEREST_SDMA_IRQ);
+	sysbus_connect_irq(SYS_BUS_DEVICE(uart[EVEREST_BLUETOOTH_UART]), EVEREST_UART_TX_DMA_REQUEST,
+			qdev_get_gpio_in(sdma, EVEREST_BLUETOOTH_UART_TX_DMA_EVENT));
 	for (i = 0; i < ARRAY_SIZE(everest_ssi); i++) {
 		DeviceState *ssi = qdev_new("imx31.ssi");
 

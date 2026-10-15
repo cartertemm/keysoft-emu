@@ -4,7 +4,8 @@
  * Scripts are not executed. The command channel (channel 0) completes at
  * once. A data channel copies its buffer descriptors to the peripheral address
  * from its context each time one of its DMA events fires, which is what the
- * ROM scripts for memory-to-peripheral transfers do.
+ * ROM scripts for memory-to-peripheral transfers do. A channel that starts
+ * while its event is held high copies all of its buffers at once.
  *
  * This work is licensed under the terms of the GNU GPL, version 2 or later.
  * See the COPYING file in the top-level directory.
@@ -72,6 +73,7 @@ struct IMX31SDMAState {
 	MemoryRegion iomem;
 	qemu_irq irq;
 	uint32_t regs[SDMA_NUM_REGS];
+	uint32_t event_levels;
 	IMX31SDMAChannel channels[SDMA_NUM_CHANNELS];
 };
 
@@ -158,6 +160,10 @@ static void imx31_sdma_event(void *opaque, int event, int level)
 	int channel;
 	uint32_t moved, total;
 
+	if (level == !!(s->event_levels & BIT(event))) {
+		return;
+	}
+	s->event_levels ^= BIT(event);
 	if (!level) {
 		return;
 	}
@@ -198,13 +204,35 @@ static void imx31_sdma_complete_channel(IMX31SDMAState *s, int channel)
 	}
 }
 
+static uint32_t imx31_sdma_requesting_channels(IMX31SDMAState *s)
+{
+	uint32_t channels = 0;
+	int event;
+
+	for (event = 0; event < SDMA_NUM_EVENTS; event++) {
+		if (s->event_levels & BIT(event)) {
+			channels |= s->regs[(SDMA_CHNENBL + event * 4) / 4];
+		}
+	}
+	return channels;
+}
+
 static void imx31_sdma_start(IMX31SDMAState *s, uint32_t channels)
 {
+	int channel;
+
 	if (channels & BIT(SDMA_COMMAND_CHANNEL)) {
 		imx31_sdma_complete_channel(s, SDMA_COMMAND_CHANNEL);
 		channels &= ~BIT(SDMA_COMMAND_CHANNEL);
 	}
 	s->regs[SDMA_STOP_STAT / 4] |= channels;
+	channels &= imx31_sdma_requesting_channels(s);
+	for (channel = 1; channel < SDMA_NUM_CHANNELS; channel++) {
+		if (channels & BIT(channel)) {
+			while (imx31_sdma_transfer_word(s, channel)) {
+			}
+		}
+	}
 }
 
 static void imx31_sdma_reset(DeviceState *dev)
@@ -212,6 +240,7 @@ static void imx31_sdma_reset(DeviceState *dev)
 	IMX31SDMAState *s = IMX31_SDMA(dev);
 
 	memset(s->regs, 0, sizeof(s->regs));
+	s->event_levels = 0;
 	memset(s->channels, 0, sizeof(s->channels));
 	imx31_sdma_update_irq(s);
 }
@@ -270,10 +299,11 @@ static const MemoryRegionOps imx31_sdma_ops = {
 
 static const VMStateDescription vmstate_imx31_sdma = {
 	.name = TYPE_IMX31_SDMA,
-	.version_id = 1,
-	.minimum_version_id = 1,
+	.version_id = 2,
+	.minimum_version_id = 2,
 	.fields = (const VMStateField[]) {
 		VMSTATE_UINT32_ARRAY(regs, IMX31SDMAState, SDMA_NUM_REGS),
+		VMSTATE_UINT32(event_levels, IMX31SDMAState),
 		VMSTATE_END_OF_LIST()
 	},
 };

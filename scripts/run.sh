@@ -16,6 +16,10 @@ KEYS_PORT="${KEYS_PORT:-5555}"
 KERNEL_ADDR=0x80200000
 # The Everest board puts a small stub here that stands in for the boot loader.
 BOOT_STUB_ADDR=0x80010000
+# The kernel reads the FPGA image from NOR flash here. The extracted file has a
+# header of FPGA_FILE_HEADER_BYTES before the flash contents.
+FPGA_NOR_ADDR=0xa00c0000
+FPGA_FILE_HEADER_BYTES=0x48
 NAND_CHIP_COUNT=4
 # Each chip: 4096 blocks of 128 pages, each page 4096 data bytes plus 224 spare bytes.
 NAND_IMAGE_BYTES=2264924160
@@ -36,4 +40,5 @@ PATH="$QEMU_BUILD/subprojects/slirp:$MINGW_BIN:$PATH" exec "$QEMU_BUILD/qemu-sys
 	-chardev "socket,id=keys,host=127.0.0.1,port=$KEYS_PORT,server=on,wait=off" \
 	"${nand_drives[@]}" \
 	-device loader,file="$PROJECT/extracted/Everest_Kernel/image.bin",addr=$KERNEL_ADDR,force-raw=on \
+	-device loader,file="$PROJECT/extracted/Everest_Fpga/image.bin",addr=$((FPGA_NOR_ADDR - FPGA_FILE_HEADER_BYTES)),force-raw=on \
 	-device loader,addr=$BOOT_STUB_ADDR,cpu-num=0 "$@"
