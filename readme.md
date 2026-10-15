@@ -92,9 +92,32 @@ The first boot creates four persistent NAND images in `state`. Later runs reuse 
 
 ### Making a release
 
+A release needs MSYS2 with the build tools from the `pacman` command above, and a QEMU source tree. It does not need the firmware or Python. Run all the commands in an MSYS2 MINGW64 shell, in the repository root.
+
 1. Change the version number in the `VERSION` file (in the root of this repository).
-2. From the MINGW64 shell, run `bash scripts/build_release.sh`. This writes `dist/keysoft-emu-<version>.zip`.
-3. Upload the zip to the Releases page.
+2. If you do not have a QEMU source tree yet, clone it:
+
+	```bash
+	git clone --branch v11.1.0 https://gitlab.com/qemu-project/qemu.git ~/qemu-everest/qemu
+	```
+
+3. Build QEMU with the latest device models:
+
+	```bash
+	bash scripts/build_qemu.sh
+	```
+
+4. Build the release:
+
+	```bash
+	bash scripts/build_release.sh
+	```
+
+	This writes `dist/keysoft-emu-<version>.zip`. The first time, it also builds `qemu-img`, which takes a few minutes.
+5. Test the zip. Unzip it into an empty folder, add a KeySoft `.hwi` file, and run `start-emu.exe`. Make sure that it shows the new version and that KeySoft starts.
+6. Upload the zip to the Releases page.
+
+Both scripts look for QEMU in the parent folder of `QEMU_BUILD` if you set it, and in `~/qemu-everest/qemu` if you did not. To use a different folder, give it as the first argument, for example `bash scripts/build_release.sh /c/path/to/qemu`.
 
 `start-emu.exe` will always show the version when it starts. To show only the version number and exit, run `start-emu.exe --version` (or `-v`).
 

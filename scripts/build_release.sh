@@ -2,17 +2,19 @@
 # Build the portable release: dist/keysoft-emu-<version>.zip with start-emu, the keyboard,
 # QEMU, qemu-img, and the DLLs they need.
 # Usage (MSYS2 MINGW64 shell): scripts/build_release.sh [qemu source tree]
+# The default tree is the parent of $QEMU_BUILD, or ~/qemu-everest/qemu.
 set -euo pipefail
 
 PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
-QEMU_TREE="${1:-$HOME/qemu-everest/qemu}"
+QEMU_BUILD="${QEMU_BUILD:-$HOME/qemu-everest/qemu/build}"
+QEMU_TREE="${1:-$(dirname "$QEMU_BUILD")}"
 SLIRP_DIR="$QEMU_TREE/build/subprojects/slirp"
 DIST="$PROJECT/dist"
 STAGE="$DIST/keysoft-emu"
 VERSION="$(tr -d '\r\n' < "$PROJECT/VERSION")"
 ZIP="$DIST/keysoft-emu-$VERSION.zip"
 
-[ -f "$QEMU_TREE/build/qemu-system-arm.exe" ] || { echo "Build QEMU first with scripts/build_qemu.sh" >&2; exit 1; }
+[ -f "$QEMU_TREE/build/qemu-system-arm.exe" ] || { echo "No QEMU build in $QEMU_TREE/build. Build it first with: bash scripts/build_qemu.sh $QEMU_TREE" >&2; exit 1; }
 
 rm -rf "$STAGE" "$ZIP"
 mkdir -p "$STAGE/qemu"

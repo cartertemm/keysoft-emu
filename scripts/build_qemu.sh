@@ -1,10 +1,14 @@
 #!/bin/bash
 # Copy the Everest device models into a QEMU source tree and build qemu-system-arm.
-# Run inside an MSYS2 MINGW64 shell: scripts/build_qemu.sh ~/qemu-everest/qemu
+# Run inside an MSYS2 MINGW64 shell: scripts/build_qemu.sh [qemu source tree]
+# The default tree is the parent of $QEMU_BUILD, or ~/qemu-everest/qemu.
 set -euo pipefail
 
-QEMU_TREE="$1"
+QEMU_BUILD="${QEMU_BUILD:-$HOME/qemu-everest/qemu/build}"
+QEMU_TREE="${1:-$(dirname "$QEMU_BUILD")}"
 OVERLAY="$(cd "$(dirname "$0")/../qemu" && pwd)"
+
+[ -d "$QEMU_TREE/.git" ] || { echo "No QEMU source in $QEMU_TREE. Clone it with: git clone --branch v11.1.0 https://gitlab.com/qemu-project/qemu.git $QEMU_TREE" >&2; exit 1; }
 
 add_source() {
 	local meson_file="$QEMU_TREE/$1/meson.build" source_set="$2" file="$3"
