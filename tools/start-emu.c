@@ -5,7 +5,7 @@
  * folder and checks it. Then it creates the NAND images and starts QEMU and
  * the braille keyboard. The QEMU arguments match scripts/run.sh.
  *
- * Build: gcc -O2 -o start-emu.exe tools/start-emu.c -lws2_32
+ * Build: gcc -O2 -DVERSION=\"$(cat VERSION)\" -o start-emu.exe tools/start-emu.c -lws2_32
  */
 
 #include <stdarg.h>
@@ -14,6 +14,10 @@
 #include <string.h>
 #include <winsock2.h>
 #include <windows.h>
+
+#ifndef VERSION
+#define VERSION "dev"
+#endif
 
 #define BEX_MAGIC "HUMACE60"
 #define BEX_MAGIC_SIZE 8
@@ -435,7 +439,7 @@ static BOOL WINAPI ignore_interrupt(DWORD type)
 	return type == CTRL_C_EVENT || type == CTRL_BREAK_EVENT;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
 	char folder[MAX_PATH];
 	char hwi[MAX_PATH];
@@ -445,6 +449,10 @@ int main(void)
 	const char *problem;
 
 	setvbuf(stdout, NULL, _IONBF, 0);
+	printf("keysoft-emu %s\n", VERSION);
+	if (argc > 1 && (!strcmp(argv[1], "-v") || !strcmp(argv[1], "--version"))) {
+		return 0;
+	}
 	GetModuleFileNameA(NULL, folder, sizeof(folder));
 	*strrchr(folder, '\\') = 0;
 	SetCurrentDirectoryA(folder);

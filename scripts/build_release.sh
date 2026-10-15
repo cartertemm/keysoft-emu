@@ -10,12 +10,13 @@ SLIRP_DIR="$QEMU_TREE/build/subprojects/slirp"
 DIST="$PROJECT/dist"
 STAGE="$DIST/keysoft-emu"
 ZIP="$DIST/keysoft-emu.zip"
+VERSION="$(tr -d '\r\n' < "$PROJECT/VERSION")"
 
 [ -f "$QEMU_TREE/build/qemu-system-arm.exe" ] || { echo "Build QEMU first with scripts/build_qemu.sh" >&2; exit 1; }
 
 rm -rf "$STAGE" "$ZIP"
 mkdir -p "$STAGE/qemu"
-gcc -O2 -o "$STAGE/start-emu.exe" "$PROJECT/tools/start-emu.c" -lws2_32
+gcc -O2 -DVERSION="\"$VERSION\"" -o "$STAGE/start-emu.exe" "$PROJECT/tools/start-emu.c" -lws2_32
 gcc -O2 -mwindows -o "$STAGE/keyboard.exe" "$PROJECT/tools/keyboard.c" -lws2_32
 
 # qemu-img gets its own build folder so the emulator build keeps its options.
@@ -42,4 +43,4 @@ grep '^/mingw64/bin/' <<< "$dependencies" | xargs -r cp -t "$STAGE/qemu/"
 cp "$PROJECT/readme.md" "$STAGE/"
 cp "$QEMU_TREE/COPYING" "$QEMU_TREE/COPYING.LIB" "$STAGE/qemu/"
 (cd "$DIST" && /c/Windows/System32/tar.exe -a -c -f keysoft-emu.zip keysoft-emu)
-echo "Wrote $ZIP"
+echo "Wrote $ZIP (version $VERSION)"

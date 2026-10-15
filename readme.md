@@ -90,6 +90,14 @@ Open another terminal and run `tools/keyboard.exe` for braille keyboard input. T
 
 The first boot creates four persistent NAND images in `state`. Later runs reuse them.
 
+### Making a release
+
+1. Change the version number in the `VERSION` file.
+2. From the MINGW64 shell, run `bash scripts/build_release.sh`. This writes `dist/keysoft-emu.zip`.
+3. Upload the zip to the Releases page.
+
+`start-emu.exe` shows the version when it starts. To show only the version, run `start-emu.exe --version` (or `-v`).
+
 ## Keyboard
 
 Type on the Apex braille keyboard with these PC keys. The keyboard window must have focus.
