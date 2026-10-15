@@ -76,6 +76,8 @@ struct IMX31SSIState {
 	uint32_t ring_count;
 	bool playing;
 	int64_t first_frame_ns;
+	int64_t clock_start_ns;
+	uint64_t frames_clocked;
 };
 
 static bool imx31_ssi_fifo_pop(IMX31SSIState *s, int16_t *sample)
@@ -148,20 +150,22 @@ static void imx31_ssi_ring_push(IMX31SSIState *s, int16_t left, int16_t right)
 }
 
 /*
- * Shifts frames out of the FIFO until the cushion for the host audio backend
- * is full. The host audio device sets the sample rate, as the codec's bit
- * clock does on the board. With instruction counting, guest time can fall
- * behind host time, so a rate in guest time would let the host device run out
- * of frames. The cushion covers short pauses of the guest.
+ * Shifts frames out of the FIFO at the sample rate in host time, as the
+ * codec's bit clock does on the board. With instruction counting, guest time
+ * can fall behind host time, so a rate in guest time would let the host device
+ * run out of frames. Shifting faster than the sample rate empties a DMA buffer
+ * before the guest has refilled the other one, and the wave driver then queues
+ * its buffers out of order. Frame slots that the guest misses are lost, as in
+ * a FIFO underrun on the board.
  */
 static void imx31_ssi_tick(void *opaque)
 {
 	IMX31SSIState *s = opaque;
 	int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT);
+	uint64_t due = muldiv64(now - s->clock_start_ns, SSI_SAMPLE_RATE, NANOSECONDS_PER_SECOND);
 	int slots = imx31_ssi_slots_per_frame(s);
-	uint32_t frame;
 
-	for (frame = s->ring_count; frame < SSI_CUSHION_FRAMES; frame++) {
+	for (; s->frames_clocked < due; s->frames_clocked++) {
 		int16_t left, right;
 
 		if (!imx31_ssi_next_sample(s, &left)) {
@@ -173,6 +177,7 @@ static void imx31_ssi_tick(void *opaque)
 		}
 		imx31_ssi_ring_push(s, left, right);
 	}
+	s->frames_clocked = due;
 	timer_mod(s->timer, now + SSI_TICK_NS);
 }
 
@@ -250,7 +255,9 @@ static void imx31_ssi_update_active(IMX31SSIState *s)
 	if (active) {
 		imx31_ssi_open_voice(s);
 		audio_be_set_active_out(s->audio_be, s->voice, true);
-		timer_mod(s->timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT) + SSI_TICK_NS);
+		s->clock_start_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL_RT);
+		s->frames_clocked = 0;
+		timer_mod(s->timer, s->clock_start_ns + SSI_TICK_NS);
 	} else {
 		timer_del(s->timer);
 	}
