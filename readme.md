@@ -6,7 +6,9 @@ Released in late 2009, the BrailleNote Apex became one of the most widely adopte
 
 I and many others grew up using the BrailleNote MPower, PK, and later the Apex. The Apex specifically was my computer before I cared about a computer, and what I believe to be a huge driver of my present interest in technology. The last unit I had is now sadly stuck in a boot loop at the bottom of a box in a closet in my home office. So I wanted to see how closely its hardware could be reproduced in software.
 
-This emulator was built for the purposes of nostalgia, and to see how far I could go. It was not built to rip off HumanWare or redistribute their technology. I have provided the last update ever released to Keysoft (version 9.5), the same .hwi file that Humanware had on their website prior to fully shelving the product. I have not provided the ROM or the firmware or anything that didn't originally come with the product. In short, don't sue me.
+This emulator was built for the purposes of nostalgia, and to see how far I could go. It was not built to rip off HumanWare or redistribute their technology. It runs the last update ever released for KeySoft (version 9.5.1), the same .hwi file that HumanWare had on their website before they shelved the product. This repository does not include that file, the ROM, or any other part of the firmware.
+
+This project is not affiliated with or endorsed by HumanWare. HumanWare, BrailleNote, and KeySoft are trademarks of their owners and are used here only to describe the original product. The emulator is for preservation and personal use. It is free, and I don't accept money for it in any form, including donations and ads.
 
 ## Getting started
 
