@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the portable release: dist/keysoft-emu.zip with start-emu, the keyboard,
+# Build the portable release: dist/keysoft-emu-<version>.zip with start-emu, the keyboard,
 # QEMU, qemu-img, and the DLLs they need.
 # Usage (MSYS2 MINGW64 shell): scripts/build_release.sh [qemu source tree]
 set -euo pipefail
@@ -9,8 +9,8 @@ QEMU_TREE="${1:-$HOME/qemu-everest/qemu}"
 SLIRP_DIR="$QEMU_TREE/build/subprojects/slirp"
 DIST="$PROJECT/dist"
 STAGE="$DIST/keysoft-emu"
-ZIP="$DIST/keysoft-emu.zip"
 VERSION="$(tr -d '\r\n' < "$PROJECT/VERSION")"
+ZIP="$DIST/keysoft-emu-$VERSION.zip"
 
 [ -f "$QEMU_TREE/build/qemu-system-arm.exe" ] || { echo "Build QEMU first with scripts/build_qemu.sh" >&2; exit 1; }
 
@@ -42,5 +42,5 @@ grep '^/mingw64/bin/' <<< "$dependencies" | xargs -r cp -t "$STAGE/qemu/"
 
 cp "$PROJECT/readme.md" "$STAGE/"
 cp "$QEMU_TREE/COPYING" "$QEMU_TREE/COPYING.LIB" "$STAGE/qemu/"
-(cd "$DIST" && /c/Windows/System32/tar.exe -a -c -f keysoft-emu.zip keysoft-emu)
+(cd "$DIST" && /c/Windows/System32/tar.exe -a -c -f "$(basename "$ZIP")" keysoft-emu)
 echo "Wrote $ZIP (version $VERSION)"

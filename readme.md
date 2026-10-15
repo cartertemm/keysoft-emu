@@ -18,7 +18,7 @@ If you want to get up and running quickly, you do not need to build the emulator
 
 ### Quick start
 
-1. Download `keysoft-emu.zip` from the [Releases](../../releases) page and unzip it.
+1. Download `keysoft-emu-<version>.zip` (for example, `keysoft-emu-1.0.0.zip`) from the [Releases](../../releases) page and unzip it.
 2. Get a KeySoft 9.5 update file. The list and hashes in the next section tell you which files work.
 3. Put the update file in the `keysoft-emu` folder.
 4. Run `start-emu.exe`. The first run extracts the firmware and checks it, then the emulator starts and the braille keyboard window opens.
@@ -93,7 +93,7 @@ The first boot creates four persistent NAND images in `state`. Later runs reuse 
 ### Making a release
 
 1. Change the version number in the `VERSION` file.
-2. From the MINGW64 shell, run `bash scripts/build_release.sh`. This writes `dist/keysoft-emu.zip`.
+2. From the MINGW64 shell, run `bash scripts/build_release.sh`. This writes `dist/keysoft-emu-<version>.zip`.
 3. Upload the zip to the Releases page.
 
 `start-emu.exe` shows the version when it starts. To show only the version, run `start-emu.exe --version` (or `-v`).
