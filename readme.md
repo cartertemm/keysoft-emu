@@ -14,6 +14,17 @@ This project is not affiliated with or endorsed by HumanWare. HumanWare, Braille
 
 ## Getting started
 
+If you want to get up and running quickly, you do not need to build the emulator. Just download the portable zip file, which contains everything you need to get this working on Windows. The build steps are only for developers that want to work on the project.
+
+### Quick start
+
+1. Download `keysoft-emu.zip` from the [Releases](../../releases) page and unzip it.
+2. Get a KeySoft 9.5 update file. The list and hashes in the next section tell you which files work.
+3. Put the update file in the `keysoft-emu` folder.
+4. Run `start-emu.exe`. The first run extracts the firmware and checks it, then the emulator starts and the braille keyboard window opens.
+
+### Building from source
+
 You will need:
 
 * Windows
