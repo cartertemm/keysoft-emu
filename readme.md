@@ -161,3 +161,8 @@ Almost everything works, with some notable exceptions:
 4. The FM radio is not supported.
 
 If you think they should be, or you discover something else that doesn't work quite right, please open an issue to signal interest and I will look into it as time allows.
+
+## See Also
+
+- [VBNote](https://github.com/highenergymagic/VBNote): An emulator of the VoiceNote QT and BrailleNote mPower.
+- [ssi263-speech](https://github.com/tgeczy/ssi263-speech): Emulated SSI-263 speech chip with the original firmware of the Speak-Out, Braille Lite, Accent-mini and Accent SA.
