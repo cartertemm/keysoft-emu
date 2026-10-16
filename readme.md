@@ -23,6 +23,8 @@ If you want to get up and running quickly, you do not need to build the emulator
 3. Put the update file in the `keysoft-emu` folder.
 4. Run `start-emu.exe`. The first run extracts the firmware and checks it, then the emulator starts and the braille keyboard window opens.
 
+To close the emulator, press Ctrl+C in the `start-emu` console window, or close that window. The emulator turns the Apex off first, so KeySoft saves your settings. If the emulator stops in some other way, for example if you end it from Task Manager, it is the same as removing the battery from a real Apex. You lose the changes you made since the last time the Apex was turned off.
+
 ### Building from source
 
 You will need:
