@@ -39,7 +39,8 @@
 #define NAND_CHIP_COUNT 4
 #define NAND_IMAGE_BYTES "2264924160"
 #define TELNET_PORT 2323
-#define KEYS_PORT 5555
+#define KEYS_PORT 23571
+#define KEYS_PORT_TRIES 10
 #define KEYS_WAIT_MS 30000
 #define KEYS_POLL_MS 250
 #define COMMAND_SIZE 4096
@@ -372,7 +373,7 @@ static void create_nand_images(void)
 	}
 }
 
-static void start_emulator(PROCESS_INFORMATION *process)
+static void start_emulator(PROCESS_INFORMATION *process, int keys_port)
 {
 	char command[COMMAND_SIZE];
 	int length;
@@ -382,7 +383,7 @@ static void start_emulator(PROCESS_INFORMATION *process)
 		"qemu\\qemu-system-arm.exe -M everest -display none -serial stdio -icount shift=auto"
 		" -nic user,model=lan9118,hostfwd=tcp:127.0.0.1:%d-:23"
 		" -chardev socket,id=keys,host=127.0.0.1,port=%d,server=on,wait=off",
-		TELNET_PORT, KEYS_PORT);
+		TELNET_PORT, keys_port);
 	for (chip = 0; chip < NAND_CHIP_COUNT; chip++) {
 		length += snprintf(command + length, sizeof(command) - length,
 			" -drive if=mtd,index=%d,format=qcow2,file=state\\nand%d.qcow2", chip, chip);
@@ -411,18 +412,49 @@ static BOOL port_open(int port)
 	return open;
 }
 
-static void start_keyboard(HANDLE qemu)
+static BOOL port_free(int port)
 {
-	char command[] = "keyboard.exe";
+	SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	struct sockaddr_in address = { 0 };
+	BOOL exclusive = TRUE;
+	BOOL free;
+
+	address.sin_family = AF_INET;
+	address.sin_port = htons((u_short)port);
+	address.sin_addr.s_addr = htonl(INADDR_ANY);
+	setsockopt(s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (const char *)&exclusive, sizeof(exclusive));
+	free = bind(s, (struct sockaddr *)&address, sizeof(address)) == 0;
+	closesocket(s);
+	return free;
+}
+
+static int find_keys_port(void)
+{
+	int port;
+
+	for (port = KEYS_PORT; port < KEYS_PORT + KEYS_PORT_TRIES; port++) {
+		if (port_free(port)) {
+			return port;
+		}
+	}
+	fail(FALSE, "Ports %d to %d are all in use by other programs. Close them and try again.",
+		KEYS_PORT, KEYS_PORT + KEYS_PORT_TRIES - 1);
+	return -1;
+}
+
+static void start_keyboard(HANDLE qemu, int keys_port)
+{
+	char command[COMMAND_SIZE];
 	ULONGLONG deadline = GetTickCount64() + KEYS_WAIT_MS;
 	PROCESS_INFORMATION process;
 
-	while (!port_open(KEYS_PORT)) {
+	snprintf(command, sizeof(command), "keyboard.exe %d", keys_port);
+	while (!port_open(keys_port)) {
 		if (WaitForSingleObject(qemu, KEYS_POLL_MS) == WAIT_OBJECT_0) {
 			return;
 		}
 		if (GetTickCount64() > deadline) {
-			printf("The emulator did not open the keyboard port. Start keyboard.exe yourself.\n");
+			printf("The emulator did not open the keyboard port. Start \"keyboard.exe %d\" yourself.\n", keys_port);
 			return;
 		}
 	}
@@ -430,7 +462,7 @@ static void start_keyboard(HANDLE qemu)
 		CloseHandle(process.hThread);
 		CloseHandle(process.hProcess);
 	} else {
-		printf("Could not start keyboard.exe. Start it yourself.\n");
+		printf("Could not start keyboard.exe. Start \"keyboard.exe %d\" yourself.\n", keys_port);
 	}
 }
 
@@ -448,6 +480,7 @@ int main(int argc, char **argv)
 	WSADATA winsock;
 	DWORD exit_code = 1;
 	const char *problem;
+	int keys_port;
 
 	setvbuf(stdout, NULL, _IONBF, 0);
 	printf("keysoft-emu %s\n", VERSION);
@@ -472,8 +505,9 @@ int main(int argc, char **argv)
 	create_nand_images();
 	WSAStartup(MAKEWORD(2, 2), &winsock);
 	SetConsoleCtrlHandler(ignore_interrupt, TRUE);
-	start_emulator(&qemu);
-	start_keyboard(qemu.hProcess);
+	keys_port = find_keys_port();
+	start_emulator(&qemu, keys_port);
+	start_keyboard(qemu.hProcess, keys_port);
 	WaitForSingleObject(qemu.hProcess, INFINITE);
 	GetExitCodeProcess(qemu.hProcess, &exit_code);
 	return (int)exit_code;

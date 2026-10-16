@@ -13,7 +13,7 @@
  * dots drops a key. Alt is a modifier and does not count toward that limit.
  *
  * Build: gcc -O2 -mwindows -o keyboard.exe tools/keyboard.c -lws2_32
- * Usage: keyboard.exe [port]   (default port 5555)
+ * Usage: keyboard.exe [port]   (default port 23571)
  */
 
 #include <stdio.h>
@@ -21,7 +21,7 @@
 #include <winsock2.h>
 #include <windows.h>
 
-#define DEFAULT_PORT 5555
+#define DEFAULT_PORT 23571
 #define BRAILLE_FIFO 1
 #define POWER_SWITCH_SOURCE 3
 #define POWER_SWITCH_KEY VK_F12
