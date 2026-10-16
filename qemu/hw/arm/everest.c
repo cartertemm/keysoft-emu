@@ -21,12 +21,14 @@
 #include "hw/ssi/ssi.h"
 #include "hw/usb/chipidea.h"
 #include "net/net.h"
+#include "qemu/timer.h"
 #include "qemu/units.h"
 #include "system/address-spaces.h"
 #include "system/block-backend.h"
 #include "system/blockdev.h"
 #include "system/qtest.h"
 #include "system/reset.h"
+#include "system/runstate.h"
 #include "system/system.h"
 
 #define EVEREST_RAM_SIZE (256 * MiB)
@@ -61,6 +63,15 @@
 #define EVEREST_LAN_IRQ_GPIO1_PIN 4
 #define EVEREST_USB_HOST_COUNT 2
 #define EVEREST_USB_HOST_PRIORITY 1
+
+/*
+ * On a power down request, such as Ctrl+C, the board turns the power switch
+ * off. KeySoft saves its registry and suspends, and then the machine shuts
+ * down. The guest takes about 200 ms. Windows ends the process about 5
+ * seconds after its console window closes, so shut down before then even if
+ * the guest does not suspend.
+ */
+#define EVEREST_POWER_DOWN_TIMEOUT_MS 3000
 
 /*
  * State that the boot loader (eboot) leaves for the kernel. The board provides
@@ -148,6 +159,11 @@ typedef struct EverestState {
 	DeviceState *cspi[EVEREST_CSPI_COUNT];
 	MemoryRegion iomuxc;
 	MemoryRegion nor;
+	qemu_irq pmic_power_off;
+	Notifier powerdown;
+	QEMUTimer *power_down_timer;
+	bool suspended;
+	bool powering_down;
 } EverestState;
 
 static const struct {
@@ -264,6 +280,51 @@ static void everest_reset(MachineState *machine, ResetType type)
 	}
 }
 
+/* The power switch from the keys device. Switching on wakes the guest. */
+static void everest_power_switch(void *opaque, int n, int off)
+{
+	EverestState *s = opaque;
+
+	if (!off) {
+		s->suspended = false;
+	}
+	qemu_set_irq(s->pmic_power_off, off);
+}
+
+static void everest_stop_mode(void *opaque, int n, int stop)
+{
+	EverestState *s = opaque;
+
+	if (!stop) {
+		return;
+	}
+	s->suspended = true;
+	if (s->powering_down) {
+		qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
+	}
+}
+
+static void everest_power_down_timeout(void *opaque)
+{
+	qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_SIGNAL);
+}
+
+static void everest_powerdown(Notifier *notifier, void *data)
+{
+	EverestState *s = container_of(notifier, EverestState, powerdown);
+
+	if (s->suspended) {
+		qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
+		return;
+	}
+	if (s->powering_down) {
+		return;
+	}
+	s->powering_down = true;
+	qemu_set_irq(s->pmic_power_off, 1);
+	timer_mod(s->power_down_timer, qemu_clock_get_ms(QEMU_CLOCK_REALTIME) + EVEREST_POWER_DOWN_TIMEOUT_MS);
+}
+
 static DeviceState *everest_create_device(EverestState *s, const char *type, hwaddr addr, int irq)
 {
 	DeviceState *dev = qdev_new(type);
@@ -371,7 +432,12 @@ static void everest_init(MachineState *machine)
 	sysbus_realize_and_unref(SYS_BUS_DEVICE(keys), &error_fatal);
 	sysbus_mmio_map(SYS_BUS_DEVICE(keys), 0, EVEREST_KEYS_ADDR);
 	sysbus_connect_irq(SYS_BUS_DEVICE(keys), 0, qdev_get_gpio_in(DEVICE(&s->soc.gpio[0]), EVEREST_KEYS_IRQ_GPIO1_PIN));
-	qdev_connect_gpio_out_named(keys, "power-off", 0, qdev_get_gpio_in_named(pmic, "power-off", 0));
+	s->pmic_power_off = qdev_get_gpio_in_named(pmic, "power-off", 0);
+	qdev_connect_gpio_out_named(keys, "power-off", 0, qemu_allocate_irq(everest_power_switch, s, 0));
+	qdev_connect_gpio_out_named(DEVICE(&s->soc.ccm), "stop-mode", 0, qemu_allocate_irq(everest_stop_mode, s, 0));
+	s->power_down_timer = timer_new_ms(QEMU_CLOCK_REALTIME, everest_power_down_timeout, s);
+	s->powerdown.notify = everest_powerdown;
+	qemu_register_powerdown_notifier(&s->powerdown);
 
 	sdma = everest_create_device(s, "imx31.sdma", EVEREST_SDMA_ADDR, EVEREST_SDMA_IRQ);
 	sysbus_connect_irq(SYS_BUS_DEVICE(uart[EVEREST_BLUETOOTH_UART]), EVEREST_UART_TX_DMA_REQUEST,

@@ -1,0 +1,24 @@
+diff --git a/os-win32.c b/os-win32.c
+index c1bff80..ca876ce 100644
+--- a/os-win32.c
++++ b/os-win32.c
+@@ -30,7 +30,18 @@
+ 
+ static BOOL WINAPI qemu_ctrl_handler(DWORD type)
+ {
+-    qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_SIGNAL);
++    static bool powerdown_requested;
++
++    /*
++     * The first event lets the guest power down so that it can save its
++     * state. The machine then shuts down. A second event stops at once.
++     */
++    if (powerdown_requested) {
++        qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_SIGNAL);
++    } else {
++        powerdown_requested = true;
++        qemu_system_powerdown_request();
++    }
+     /* Windows 7 kills application when the function returns.
+        Sleep here to give QEMU a try for closing.
+        Sleep period is 10000ms because Windows kills the program

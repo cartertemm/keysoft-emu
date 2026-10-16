@@ -1,0 +1,51 @@
+diff --git a/hw/misc/imx31_ccm.c b/hw/misc/imx31_ccm.c
+index 8d62071..9f344b9 100644
+--- a/hw/misc/imx31_ccm.c
++++ b/hw/misc/imx31_ccm.c
+@@ -13,6 +13,7 @@
+ 
+ #include "qemu/osdep.h"
+ #include "hw/misc/imx31_ccm.h"
++#include "hw/core/irq.h"
+ #include "migration/vmstate.h"
+ #include "qemu/log.h"
+ #include "qemu/module.h"
+@@ -246,6 +247,7 @@ static void imx31_ccm_write(void *opaque, hwaddr offset, uint64_t value,
+     switch (offset >> 2) {
+     case IMX31_CCM_CCMR_REG:
+         s->reg[IMX31_CCM_CCMR_REG] = CCMR_FPMF | (value & 0x3b6fdfff);
++        qemu_set_irq(s->stop_mode, (value & CCMR_LPM) == CCMR_LPM_STOP);
+         break;
+     case IMX31_CCM_PDR0_REG:
+         s->reg[IMX31_CCM_PDR0_REG] = value & 0xff9f3fff;
+@@ -302,6 +304,7 @@ static void imx31_ccm_init(Object *obj)
+     memory_region_init_io(&s->iomem, OBJECT(dev), &imx31_ccm_ops, s,
+                           TYPE_IMX31_CCM, 0x1000);
+     sysbus_init_mmio(sd, &s->iomem);
++    qdev_init_gpio_out_named(dev, &s->stop_mode, "stop-mode", 1);
+ }
+ 
+ static void imx31_ccm_class_init(ObjectClass *klass, const void *data)
+diff --git a/include/hw/misc/imx31_ccm.h b/include/hw/misc/imx31_ccm.h
+index 18e08ee..f57e430 100644
+--- a/include/hw/misc/imx31_ccm.h
++++ b/include/hw/misc/imx31_ccm.h
+@@ -48,6 +48,8 @@
+ #define CCMR_MDS     (1<<7)
+ #define CCMR_FPMF    (1<<26)
+ #define CCMR_PRCS    (3<<1)
++#define CCMR_LPM     (3<<14)
++#define CCMR_LPM_STOP (2<<14)
+ 
+ #define PMCR0_DFSUP1 (1<<31)
+ 
+@@ -84,6 +86,9 @@ struct IMX31CCMState {
+ 
+     uint32_t reg[IMX31_CCM_MAX_REG];
+ 
++    /* High while the low power mode is stop, which the CPU enters on WFI. */
++    qemu_irq stop_mode;
++
+ };
+ 
+ #endif /* IMX31_CCM_H */
