@@ -5,6 +5,10 @@
  * folder and checks it. Then it creates the NAND images and starts QEMU and
  * the braille keyboard. The QEMU arguments match scripts/run.sh.
  *
+ * With --qt, it emulates the Apex QT with the QWERTY keyboard. The QT keeps
+ * its own state folder, because the firmware saves the keyboard type on the
+ * first boot.
+ *
  * Build: gcc -O2 -DVERSION=\"$(cat VERSION)\" -o start-emu.exe tools/start-emu.c -lws2_32
  */
 
@@ -62,6 +66,11 @@ static const struct {
 	{ 0x813af370, 0xebfffb01 },
 	{ 0x8239dc0c, 0x1a000003 },
 };
+
+static const char bt_state_folder[] = "state";
+static const char qt_state_folder[] = "state-qt";
+
+static BOOL qt;
 
 typedef struct Buffer {
 	unsigned char *data;
@@ -350,6 +359,11 @@ static void extract_firmware(const char *hwi)
 	}
 }
 
+static const char *state_folder(void)
+{
+	return qt ? qt_state_folder : bt_state_folder;
+}
+
 static void create_nand_images(void)
 {
 	char command[COMMAND_SIZE];
@@ -357,9 +371,9 @@ static void create_nand_images(void)
 	DWORD exit_code;
 	int chip;
 
-	CreateDirectoryA("state", NULL);
+	CreateDirectoryA(state_folder(), NULL);
 	for (chip = 0; chip < NAND_CHIP_COUNT; chip++) {
-		snprintf(image, sizeof(image), "state\\nand%d.qcow2", chip);
+		snprintf(image, sizeof(image), "%s\\nand%d.qcow2", state_folder(), chip);
 		if (file_exists(image)) {
 			continue;
 		}
@@ -380,13 +394,13 @@ static void start_emulator(PROCESS_INFORMATION *process, int keys_port)
 	int chip;
 
 	length = snprintf(command, sizeof(command),
-		"qemu\\qemu-system-arm.exe -M everest -display none -serial stdio -icount shift=auto"
+		"qemu\\qemu-system-arm.exe -M %s -display none -serial stdio -icount shift=auto"
 		" -nic user,model=lan9118,hostfwd=tcp:127.0.0.1:%d-:23"
 		" -chardev socket,id=keys,host=127.0.0.1,port=%d,server=on,wait=off",
-		TELNET_PORT, keys_port);
+		qt ? "everest,qt=on" : "everest", TELNET_PORT, keys_port);
 	for (chip = 0; chip < NAND_CHIP_COUNT; chip++) {
 		length += snprintf(command + length, sizeof(command) - length,
-			" -drive if=mtd,index=%d,format=qcow2,file=state\\nand%d.qcow2", chip, chip);
+			" -drive if=mtd,index=%d,format=qcow2,file=%s\\nand%d.qcow2", chip, state_folder(), chip);
 	}
 	snprintf(command + length, sizeof(command) - length,
 		" -device loader,file=%s,addr=0x%x,force-raw=on"
@@ -448,13 +462,13 @@ static void start_keyboard(HANDLE qemu, int keys_port)
 	ULONGLONG deadline = GetTickCount64() + KEYS_WAIT_MS;
 	PROCESS_INFORMATION process;
 
-	snprintf(command, sizeof(command), "keyboard.exe %d", keys_port);
+	snprintf(command, sizeof(command), "keyboard.exe %s%d", qt ? "--qt " : "", keys_port);
 	while (!port_open(keys_port)) {
 		if (WaitForSingleObject(qemu, KEYS_POLL_MS) == WAIT_OBJECT_0) {
 			return;
 		}
 		if (GetTickCount64() > deadline) {
-			printf("The emulator did not open the keyboard port. Start \"keyboard.exe %d\" yourself.\n", keys_port);
+			printf("The emulator did not open the keyboard port. Start \"%s\" yourself.\n", command);
 			return;
 		}
 	}
@@ -462,7 +476,7 @@ static void start_keyboard(HANDLE qemu, int keys_port)
 		CloseHandle(process.hThread);
 		CloseHandle(process.hProcess);
 	} else {
-		printf("Could not start keyboard.exe. Start \"keyboard.exe %d\" yourself.\n", keys_port);
+		printf("Could not start keyboard.exe. Start \"%s\" yourself.\n", command);
 	}
 }
 
@@ -481,11 +495,20 @@ int main(int argc, char **argv)
 	DWORD exit_code = 1;
 	const char *problem;
 	int keys_port;
+	int i;
 
 	setvbuf(stdout, NULL, _IONBF, 0);
 	printf("keysoft-emu %s\n", VERSION);
-	if (argc > 1 && (!strcmp(argv[1], "-v") || !strcmp(argv[1], "--version"))) {
-		return 0;
+	for (i = 1; i < argc; i++) {
+		if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) {
+			return 0;
+		}
+		if (!strcmp(argv[i], "--qt")) {
+			qt = TRUE;
+		}
+	}
+	if (qt) {
+		printf("Emulating the BrailleNote Apex QT.\n");
 	}
 	if (CreateMutexA(NULL, TRUE, INSTANCE_MUTEX) && GetLastError() == ERROR_ALREADY_EXISTS) {
 		fail(FALSE, "start-emu is already running. Make sure that the previous process was fully closed by pressing control+c on the open console window.");

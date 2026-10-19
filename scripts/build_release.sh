@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build the portable release: dist/keysoft-emu-<version>.zip with start-emu, the keyboard,
-# QEMU, qemu-img, and the DLLs they need.
+# start-emu-qt.bat, QEMU, qemu-img, and the DLLs they need.
 # Usage (MSYS2 MINGW64 shell): scripts/build_release.sh [qemu source tree]
 # The default tree is the parent of $QEMU_BUILD, or ~/qemu-everest/qemu.
 set -euo pipefail
@@ -42,6 +42,7 @@ if [ -n "$outside" ]; then
 fi
 grep '^/mingw64/bin/' <<< "$dependencies" | xargs -r cp -t "$STAGE/qemu/"
 
+printf '@"%%~dp0start-emu.exe" --qt\r\n' > "$STAGE/start-emu-qt.bat"
 cp "$PROJECT/readme.md" "$STAGE/"
 cp "$QEMU_TREE/COPYING" "$QEMU_TREE/COPYING.LIB" "$STAGE/qemu/"
 (cd "$DIST" && /c/Windows/System32/tar.exe -a -c -f "$(basename "$ZIP")" keysoft-emu)
