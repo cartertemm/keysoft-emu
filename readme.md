@@ -1,6 +1,6 @@
 # KeySoft Emulator
 
-This project recreates KeySoft 9.5.1 from the HumanWare BrailleNote Apex and runs the original Windows CE software on a modern Windows computer. Almost everything in the original KeySoft experience works, including speech, networking, persistent storage, and braille keyboard input.
+This project recreates KeySoft 9.5.1 from the HumanWare BrailleNote Apex and runs the original Windows CE software on a modern Windows computer. Almost everything in the original KeySoft experience works, including speech, networking, persistent storage, and both braille and QWERTY keyboard input.
 
 [Listen to a demo (MP3, 11 MB)](https://ctemm.me/files/keysoft-emu-demo.mp3)
 
@@ -22,6 +22,8 @@ If you want to get up and running quickly, you do not need to build the emulator
 2. Get a KeySoft 9.5 update file. The list and hashes in the next section tell you which files work.
 3. Put the update file in the `keysoft-emu` folder.
 4. Run `start-emu.exe`. The first run extracts the firmware and checks it, then the emulator starts and the braille keyboard window opens.
+
+To emulate the Apex QT, which has a QWERTY keyboard in place of the braille keyboard, run `start-emu-qt.bat` instead. You can also run `start-emu.exe --qt` from a command prompt. The QT keeps its settings and files in the `state-qt` folder, apart from the BT's `state` folder. KeySoft saves the keyboard type the first time it starts, so the two models can't share a folder. Your documents and settings don't carry over between them.
 
 To close the emulator, press Ctrl+C in the `start-emu` console window, or close that window. The emulator turns the Apex off first, so KeySoft saves your settings. If the emulator stops in some other way, for example if you end it from Task Manager, it is the same as removing the battery from a real Apex. You lose the changes you made since the last time the Apex was turned off.
 
@@ -92,6 +94,8 @@ Open another terminal and run `tools/keyboard.exe` for braille keyboard input. T
 
 The first boot creates four persistent NAND images in `state`. Later runs reuse them.
 
+To emulate the Apex QT, start the emulator with `QT=1 bash scripts/run.sh` and run `tools/keyboard.exe --qt`. The QT uses the `state-qt` folder.
+
 ### Making a release
 
 A release needs MSYS2 with the build tools from the `pacman` command above, and a QEMU source tree. It does not need the firmware or Python. Run all the commands in an MSYS2 MINGW64 shell, in the repository root.
@@ -125,6 +129,8 @@ Both scripts look for QEMU in the parent folder of `QEMU_BUILD` if you set it, a
 
 ## Keyboard
 
+### Braille keyboard (Apex BT)
+
 Type on the Apex braille keyboard with these PC keys. The keyboard window must have focus.
 
 | PC key | Apex key |
@@ -138,6 +144,25 @@ Type on the Apex braille keyboard with these PC keys. The keyboard window must h
 | Escape | Close the keyboard window |
 
 Press keys together for chords, the same as on the real keyboard. Most PC keyboards can only detect six letter keys at the same time, meaning that going to the main menu (a chord of space with all six dots) might lose a key. To get around this, you can hold the left or right alt key in place of space.
+
+### QWERTY keyboard (Apex QT)
+
+In QT mode, the letter, number, and punctuation keys, Enter, Backspace, Tab, Delete, Space, Escape, Ctrl, both Shift keys, and the arrows are the same keys on the Apex QT. The QT keys that a PC keyboard doesn't have are on these PC keys:
+
+| PC key | Apex QT key |
+| --- | --- |
+| Caps Lock | READ |
+| Left or right Alt | FUNCTION |
+| F1 | HELP |
+| F2 | REPEAT |
+| F3 | MENU |
+| ` | The single quote key on the bottom row |
+| F12 | Power switch (off and on) |
+| Alt+F4 | Close the keyboard window |
+
+Escape is the QT ESCAPE key, so it does not close the keyboard window. Caps Lock still turns Caps Lock on and off in Windows. To turn on Caps Lock in KeySoft, press Ctrl and Shift together, the same as on the QT.
+
+Only the US English QT layout is supported.
 
 ## How it works (the nerdy stuff)
 
