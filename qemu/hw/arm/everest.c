@@ -91,6 +91,12 @@
 #define EVEREST_NAND_OS2_REST_OF_CHIP 0xffffffff
 #define EVEREST_NAND_LICENSES_MB 16
 
+/* The Apex QT has a QWERTY keyboard in place of the braille keyboard. */
+#define EVEREST_HARP_CFG_KEYBOARD_OFFSET 0x75
+#define EVEREST_HARP_CFG_KEYBOARD_QWERTY 1
+#define EVEREST_HARP_CFG_MODEL_OFFSET 0x78
+#define EVEREST_HARP_CFG_MODEL_QT32 1
+
 typedef struct EverestCfgField {
 	uint16_t offset;
 	uint8_t size;
@@ -146,6 +152,8 @@ static const uint32_t everest_clock_freq[] = {
 	1,
 	0,
 };
+
+static bool everest_qt;
 
 static const uint32_t everest_boot_stub[] = {
 	0xe3a0060f, /* mov r0, #0x00f00000 */
@@ -414,6 +422,10 @@ static void everest_init(MachineState *machine)
 		stn_le_p(harp_cfg + everest_harp_cfg[i].offset, everest_harp_cfg[i].size, everest_harp_cfg[i].value);
 	}
 	memcpy(harp_cfg + EVEREST_HARP_CFG_SERIAL_OFFSET, everest_harp_cfg_serial, sizeof(everest_harp_cfg_serial));
+	if (everest_qt) {
+		harp_cfg[EVEREST_HARP_CFG_KEYBOARD_OFFSET] = EVEREST_HARP_CFG_KEYBOARD_QWERTY;
+		harp_cfg[EVEREST_HARP_CFG_MODEL_OFFSET] = EVEREST_HARP_CFG_MODEL_QT32;
+	}
 	rom_add_blob_fixed("everest.harp-cfg", harp_cfg, sizeof(harp_cfg), EVEREST_HARP_CFG_ADDR);
 	rom_add_blob_fixed("everest.boot-args", &memory_size, sizeof(memory_size),
 			EVEREST_BOOT_ARGS_MEMORY_SIZE_ADDR);
@@ -459,6 +471,16 @@ static void everest_init(MachineState *machine)
 	}
 }
 
+static bool everest_get_qt(Object *obj, Error **errp)
+{
+	return everest_qt;
+}
+
+static void everest_set_qt(Object *obj, bool value, Error **errp)
+{
+	everest_qt = value;
+}
+
 static void everest_machine_init(MachineClass *mc)
 {
 	mc->desc = "HumanWare BrailleNote Apex (ARM1136)";
@@ -468,6 +490,9 @@ static void everest_machine_init(MachineClass *mc)
 	mc->default_ram_size = EVEREST_RAM_SIZE;
 	mc->default_ram_id = "everest.ram";
 	machine_add_audiodev_property(mc);
+	object_class_property_add_bool(OBJECT_CLASS(mc), "qt", everest_get_qt, everest_set_qt);
+	object_class_property_set_description(OBJECT_CLASS(mc), "qt",
+			"Set on to emulate the Apex QT, with a QWERTY keyboard");
 }
 
 DEFINE_MACHINE_ARM("everest", everest_machine_init)
