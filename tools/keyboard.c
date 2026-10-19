@@ -13,9 +13,9 @@
  * dots drops a key. Alt is a modifier and does not count toward that limit.
  *
  * With --qt, the window is the Apex QT QWERTY keyboard instead. PC keys go to
- * the same QT keys. The QT keys that a PC does not have are on Caps Lock
- * (READ), Alt (FUNCTION), F1 (HELP), F2 (REPEAT), F3 (MENU), and ` (the bottom
- * row single quote). Escape is the QT ESCAPE key, so Alt+F4 quits.
+ * the same QT keys. The QT keys that a PC does not have are on left Alt
+ * (READ), right Alt (FUNCTION), F1 (HELP), F2 (REPEAT), F3 (MENU), and `
+ * (the bottom row single quote). Escape is the QT ESCAPE key, so Alt+F4 quits.
  *
  * Build: gcc -O2 -mwindows -o keyboard.exe tools/keyboard.c -lws2_32
  * Usage: keyboard.exe [--qt] [port]   (default port 23571)
@@ -32,6 +32,7 @@
 #define POWER_SWITCH_SOURCE 3
 #define POWER_SWITCH_KEY VK_F12
 #define RELEASE_FLAG 0x80
+#define EXTENDED_KEY_FLAG (1 << 24)
 #define KEY_COUNT 256
 #define WINDOW_WIDTH 480
 #define WINDOW_HEIGHT 160
@@ -45,7 +46,7 @@ static const char braille_instructions[] =
 	"Press Escape to quit.";
 static const char qt_title[] = "QWERTY Keyboard";
 static const char qt_instructions[] =
-	"Type as on the Apex QT. Caps Lock is READ, Alt is FUNCTION, F1 is HELP, F2 is REPEAT, F3 is MENU, "
+	"Type as on the Apex QT. Left Alt is READ, right Alt is FUNCTION, F1 is HELP, F2 is REPEAT, F3 is MENU, "
 	"and ` is the bottom row single quote.\r\n"
 	"F12 turns the power switch off or on again. Switch off before you close the emulator.\r\n"
 	"Press Alt+F4 to quit.";
@@ -103,8 +104,8 @@ static const KeyMapping qt_map[] = {
 	{ VK_LSHIFT, 30 },
 	{ VK_RSHIFT, 46 },
 	{ VK_CONTROL, 14 },    /* either Ctrl key */
-	{ VK_CAPITAL, 116 },   /* READ */
-	{ VK_MENU, 67 },       /* FUNCTION, either Alt key */
+	{ VK_LMENU, 116 },     /* READ, left Alt */
+	{ VK_RMENU, 67 },      /* FUNCTION, right Alt */
 	{ VK_F1, 126 },        /* HELP */
 	{ VK_F2, 78 },         /* REPEAT */
 	{ VK_F3, 93 },         /* MENU */
@@ -216,13 +217,22 @@ static void release_held_keys(HWND window)
 	}
 }
 
-/* Windows reports both Shift keys as VK_SHIFT, but the QT has a left and a right SHIFT. */
-static WPARAM side_of_shift(WPARAM virtual_key, LPARAM lparam)
+/*
+ * Windows reports both Shift keys as VK_SHIFT and both Alt keys as VK_MENU.
+ * In QT mode, the left and right keys are different QT keys.
+ */
+static WPARAM key_side(WPARAM virtual_key, LPARAM lparam)
 {
-	if (!qt || virtual_key != VK_SHIFT) {
+	if (!qt) {
 		return virtual_key;
 	}
-	return MapVirtualKeyA((lparam >> 16) & 0xff, MAPVK_VSC_TO_VK_EX);
+	if (virtual_key == VK_SHIFT) {
+		return MapVirtualKeyA((lparam >> 16) & 0xff, MAPVK_VSC_TO_VK_EX);
+	}
+	if (virtual_key == VK_MENU) {
+		return (lparam & EXTENDED_KEY_FLAG) ? VK_RMENU : VK_LMENU;
+	}
+	return virtual_key;
 }
 
 static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -239,13 +249,13 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 	/* Keys pressed while Alt is down come as system keys. */
 	case WM_SYSKEYDOWN:
 	case WM_SYSKEYUP:
-		if (find_code(side_of_shift(wparam, lparam)) < 0) {
+		if (find_code(key_side(wparam, lparam)) < 0) {
 			break;
 		}
 		/* fall through */
 	case WM_KEYDOWN:
 	case WM_KEYUP:
-		handle_key(window, side_of_shift(wparam, lparam), message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
+		handle_key(window, key_side(wparam, lparam), message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
 		return 0;
 	case WM_KILLFOCUS:
 		release_held_keys(window);

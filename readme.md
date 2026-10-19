@@ -151,8 +151,8 @@ In QT mode, the letter, number, and punctuation keys, Enter, Backspace, Tab, Del
 
 | PC key | Apex QT key |
 | --- | --- |
-| Caps Lock | READ |
-| Left or right Alt | FUNCTION |
+| Left Alt | READ |
+| Right Alt | FUNCTION |
 | F1 | HELP |
 | F2 | REPEAT |
 | F3 | MENU |
@@ -160,7 +160,9 @@ In QT mode, the letter, number, and punctuation keys, Enter, Backspace, Tab, Del
 | F12 | Power switch (off and on) |
 | Alt+F4 | Close the keyboard window |
 
-Escape is the QT ESCAPE key, so it does not close the keyboard window. Caps Lock still turns Caps Lock on and off in Windows. To turn on Caps Lock in KeySoft, press Ctrl and Shift together, the same as on the QT.
+Escape is the QT ESCAPE key, so it does not close the keyboard window. To turn on Caps Lock in KeySoft, press Ctrl and Shift together, the same as on the QT.
+
+On some non-US PC keyboards, the right Alt key is AltGr, and Windows also sends Ctrl when you press it. Then right Alt gives CONTROL with FUNCTION.
 
 Only the US English QT layout is supported.
 
