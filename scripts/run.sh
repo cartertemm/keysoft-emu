@@ -1,13 +1,22 @@
 #!/bin/bash
 # Boot the extracted Apex kernel on the Everest board. Extra arguments go to QEMU.
 # Usage (MSYS2 MINGW64 shell): scripts/run.sh [qemu arguments]
+# Set QT=1 to emulate the Apex QT. It keeps its own state folder, because the
+# firmware saves the keyboard type on the first boot.
 set -euo pipefail
 
 PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
 QEMU_BUILD="${QEMU_BUILD:-$HOME/qemu-everest/qemu/build}"
 MINGW_BIN="${MINGW_BIN:-/mingw64/bin}"
 QEMU_IMG="${QEMU_IMG:-$(command -v qemu-img || echo "/c/Program Files/qemu/qemu-img.exe")}"
-STATE_DIR="${STATE_DIR:-$PROJECT/state}"
+QT="${QT:-0}"
+if [ "$QT" = 1 ]; then
+	MACHINE=everest,qt=on
+	STATE_DIR="${STATE_DIR:-$PROJECT/state-qt}"
+else
+	MACHINE=everest
+	STATE_DIR="${STATE_DIR:-$PROJECT/state}"
+fi
 SERIAL="${SERIAL:-stdio}"
 # The guest's telnet server is reachable on this host port.
 TELNET_PORT="${TELNET_PORT:-2323}"
@@ -34,7 +43,7 @@ done
 
 # Guest time follows executed instructions. With host-paced time, a slow host
 # disk write can make the guest program its tick timer in the past and freeze.
-PATH="$QEMU_BUILD/subprojects/slirp:$MINGW_BIN:$PATH" exec "$QEMU_BUILD/qemu-system-arm.exe" -M everest -display none -serial "$SERIAL" \
+PATH="$QEMU_BUILD/subprojects/slirp:$MINGW_BIN:$PATH" exec "$QEMU_BUILD/qemu-system-arm.exe" -M "$MACHINE" -display none -serial "$SERIAL" \
 	-icount shift=auto \
 	-nic "user,model=lan9118,hostfwd=tcp:127.0.0.1:$TELNET_PORT-:23" \
 	-chardev "socket,id=keys,host=127.0.0.1,port=$KEYS_PORT,server=on,wait=off" \
