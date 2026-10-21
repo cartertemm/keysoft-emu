@@ -20,6 +20,7 @@ jobs:
           msystem: MINGW64
           install: >-
             git
+            diffutils
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-glib2
