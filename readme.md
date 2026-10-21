@@ -64,7 +64,7 @@ python .\scripts\extract_firmware.py .\firmware .\extracted
 Next, open an MSYS2 MINGW64 shell. Install the build tools:
 
 ```bash
-pacman -S --needed git mingw-w64-x86_64-gcc mingw-w64-x86_64-ninja mingw-w64-x86_64-glib2 mingw-w64-x86_64-pixman mingw-w64-x86_64-pkgconf mingw-w64-x86_64-python
+pacman -S --needed git diffutils mingw-w64-x86_64-gcc mingw-w64-x86_64-ninja mingw-w64-x86_64-glib2 mingw-w64-x86_64-pixman mingw-w64-x86_64-pkgconf mingw-w64-x86_64-python
 ```
 
 Go to the repository root (for example, `cd /c/path/to/keysoft-emu`). Clone QEMU, apply the custom device models, and build it. Then build the keyboard tool:
