@@ -98,9 +98,27 @@ To emulate the Apex QT, start the emulator with `QT=1 bash scripts/run.sh` and r
 
 ### Making a release
 
-A release needs MSYS2 with the build tools from the `pacman` command above, and a QEMU source tree. It does not need the firmware or Python. Run all the commands in an MSYS2 MINGW64 shell, in the repository root.
+GitHub Actions builds the release when you push a version tag.
 
-1. Change the version number in the `VERSION` file (in the root of this repository).
+1. Change the version number in the `VERSION` file (in the root of this repository), and commit the change.
+2. Tag the commit with `v` and the version, and push the tag. For version 1.2.0:
+
+	```bash
+	git tag v1.2.0
+	git push origin v1.2.0
+	```
+
+	The tag must match `VERSION`, or the build stops. The build takes about 20 minutes. When it finishes, the zip is attached to a draft release on the Releases page.
+3. Test the zip. Unzip it into an empty folder, add a KeySoft `.hwi` file, and run `start-emu.exe`. Make sure that it shows the new version and that KeySoft starts.
+4. Add the changelog to the draft release, and publish it.
+
+To build the zip without a release, open the Actions tab on GitHub, select **Release**, and select **Run workflow**. The zip is attached to the workflow run.
+
+#### Building the zip on your computer
+
+A local build needs MSYS2 with the build tools from the `pacman` command above, and a QEMU source tree. It does not need the firmware or Python. Run all the commands in an MSYS2 MINGW64 shell, in the repository root.
+
+1. Change the version number in the `VERSION` file.
 2. If you do not have a QEMU source tree yet, clone it:
 
 	```bash
@@ -120,8 +138,6 @@ A release needs MSYS2 with the build tools from the `pacman` command above, and 
 	```
 
 	This writes `dist/keysoft-emu-<version>.zip`. The first time, it also builds `qemu-img`, which takes a few minutes.
-5. Test the zip. Unzip it into an empty folder, add a KeySoft `.hwi` file, and run `start-emu.exe`. Make sure that it shows the new version and that KeySoft starts.
-6. Upload the zip to the Releases page.
 
 Both scripts look for QEMU in the parent folder of `QEMU_BUILD` if you set it, and in `~/qemu-everest/qemu` if you did not. To use a different folder, give it as the first argument, for example `bash scripts/build_release.sh /c/path/to/qemu`.
 
