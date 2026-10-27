@@ -263,6 +263,20 @@ static WORD key_from_message(WPARAM virtual_key, LPARAM lparam)
 	return scan_code | ((lparam & EXTENDED_KEY_FLAG) ? EXTENDED : 0);
 }
 
+/*
+ * On layouts with AltGr, such as UK English, right Alt also sends a left Ctrl
+ * event with the same time. That Ctrl event is not a key press.
+ */
+static BOOL is_altgr_control(HWND window, WORD key)
+{
+	MSG next;
+
+	if (key != SCAN_CONTROL || !PeekMessageA(&next, window, WM_KEYFIRST, WM_KEYLAST, PM_NOREMOVE)) {
+		return FALSE;
+	}
+	return next.time == (DWORD)GetMessageTime() && key_from_message(next.wParam, next.lParam) == SCAN_RALT;
+}
+
 static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
 	switch (message) {
@@ -283,7 +297,9 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 		/* fall through */
 	case WM_KEYDOWN:
 	case WM_KEYUP:
-		handle_key(window, key_from_message(wparam, lparam), message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
+		if (!is_altgr_control(window, key_from_message(wparam, lparam))) {
+			handle_key(window, key_from_message(wparam, lparam), message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
+		}
 		return 0;
 	case WM_KILLFOCUS:
 		release_held_keys(window);
