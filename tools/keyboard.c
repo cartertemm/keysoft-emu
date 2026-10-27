@@ -9,6 +9,9 @@
  * A or Backspace = dot 7, ; or Enter = dot 8. F12 flips the power switch off and on.
  * Escape quits.
  *
+ * Keys are matched by their position (scan code), so every keyboard layout
+ * uses the same physical keys. The key names here are the US layout names.
+ *
  * Most PC keyboards report only 6 normal keys at once, so space with all six
  * dots drops a key. Alt is a modifier and does not count toward that limit.
  *
@@ -30,10 +33,32 @@
 #define DEFAULT_PORT 23571
 #define KEYBOARD_FIFO 1
 #define POWER_SWITCH_SOURCE 3
-#define POWER_SWITCH_KEY VK_F12
 #define RELEASE_FLAG 0x80
 #define EXTENDED_KEY_FLAG (1 << 24)
-#define KEY_COUNT 256
+#define EXTENDED 0x100
+#define KEY_COUNT 0x200
+#define SCAN_ESCAPE 0x01
+#define SCAN_BACK 0x0e
+#define SCAN_TAB 0x0f
+#define SCAN_RETURN 0x1c
+#define SCAN_CONTROL 0x1d
+#define SCAN_LSHIFT 0x2a
+#define SCAN_RSHIFT 0x36
+#define SCAN_ALT 0x38
+#define SCAN_SPACE 0x39
+#define SCAN_F1 0x3b
+#define SCAN_F2 0x3c
+#define SCAN_F3 0x3d
+#define SCAN_F12 0x58
+#define SCAN_UP (EXTENDED | 0x48)
+#define SCAN_LEFT (EXTENDED | 0x4b)
+#define SCAN_RIGHT (EXTENDED | 0x4d)
+#define SCAN_DOWN (EXTENDED | 0x50)
+#define SCAN_DELETE (EXTENDED | 0x53)
+#define SCAN_NUMPAD_ENTER (EXTENDED | SCAN_RETURN)
+#define SCAN_RCONTROL (EXTENDED | SCAN_CONTROL)
+#define SCAN_RALT (EXTENDED | SCAN_ALT)
+#define POWER_SWITCH_KEY SCAN_F12
 #define WINDOW_WIDTH 480
 #define WINDOW_HEIGHT 160
 #define INSTANCE_MUTEX "Local\\keysoft-emu-keyboard"
@@ -51,64 +76,73 @@ static const char qt_instructions[] =
 	"F12 turns the power switch off or on again. Switch off before you close the emulator.\r\n"
 	"Press Alt+F4 to quit.";
 
+/* A key is its scan code, plus EXTENDED for the extended keys. */
 typedef struct KeyMapping {
-	WORD virtual_key;
+	WORD key;
 	unsigned char code;
 } KeyMapping;
 
 /* Key numbers from the keypad driver's braille key table. */
 static const KeyMapping braille_map[] = {
-	{ 'F', 25 },         /* dot 1 */
-	{ 'D', 26 },         /* dot 2 */
-	{ 'S', 27 },         /* dot 3 */
-	{ 'J', 22 },         /* dot 4 */
-	{ 'K', 21 },         /* dot 5 */
-	{ 'L', 20 },         /* dot 6 */
-	{ 'A', 28 },         /* dot 7 */
-	{ VK_BACK, 28 },     /* dot 7 */
-	{ VK_OEM_1, 19 },    /* dot 8, the ; key */
-	{ VK_RETURN, 19 },   /* dot 8 */
-	{ VK_SPACE, 125 },   /* space */
-	{ VK_MENU, 125 },    /* space, either Alt key */
+	{ 0x21, 25 },               /* F, dot 1 */
+	{ 0x20, 26 },               /* D, dot 2 */
+	{ 0x1f, 27 },               /* S, dot 3 */
+	{ 0x24, 22 },               /* J, dot 4 */
+	{ 0x25, 21 },               /* K, dot 5 */
+	{ 0x26, 20 },               /* L, dot 6 */
+	{ 0x1e, 28 },               /* A, dot 7 */
+	{ SCAN_BACK, 28 },          /* dot 7 */
+	{ 0x27, 19 },               /* ;, dot 8 */
+	{ SCAN_RETURN, 19 },        /* dot 8 */
+	{ SCAN_NUMPAD_ENTER, 19 },  /* dot 8 */
+	{ SCAN_SPACE, 125 },        /* space */
+	{ SCAN_ALT, 125 },          /* space, left Alt */
+	{ SCAN_RALT, 125 },         /* space, right Alt */
 };
 
 /* Key numbers from the keypad driver's QT key table (US English). */
 static const KeyMapping qt_map[] = {
-	{ 'A', 28 }, { 'B', 73 }, { 'C', 75 }, { 'D', 26 }, { 'E', 43 }, { 'F', 25 }, { 'G', 24 },
-	{ 'H', 23 }, { 'I', 38 }, { 'J', 22 }, { 'K', 21 }, { 'L', 20 }, { 'M', 71 }, { 'N', 72 },
-	{ 'O', 37 }, { 'P', 36 }, { 'Q', 45 }, { 'R', 42 }, { 'S', 27 }, { 'T', 41 }, { 'U', 39 },
-	{ 'V', 74 }, { 'W', 44 }, { 'X', 76 }, { 'Y', 40 }, { 'Z', 77 },
-	{ '1', 61 }, { '2', 60 }, { '3', 59 }, { '4', 58 }, { '5', 57 },
-	{ '6', 56 }, { '7', 55 }, { '8', 54 }, { '9', 53 }, { '0', 52 },
-	{ VK_OEM_MINUS, 51 },
-	{ VK_OEM_PLUS, 35 },   /* = */
-	{ VK_OEM_4, 87 },      /* [ */
-	{ VK_OEM_6, 86 },      /* ] */
-	{ VK_OEM_5, 85 },      /* backslash */
-	{ VK_OEM_1, 19 },      /* ; */
-	{ VK_OEM_7, 84 },      /* ' */
-	{ VK_OEM_COMMA, 70 },
-	{ VK_OEM_PERIOD, 69 },
-	{ VK_OEM_2, 68 },      /* / */
-	{ VK_OEM_3, 120 },     /* `, the bottom row single quote */
-	{ VK_ESCAPE, 62 },
-	{ VK_TAB, 122 },
-	{ VK_RETURN, 83 },
-	{ VK_BACK, 99 },
-	{ VK_DELETE, 119 },
-	{ VK_SPACE, 125 },
-	{ VK_UP, 100 },
-	{ VK_RIGHT, 101 },
-	{ VK_DOWN, 102 },
-	{ VK_LEFT, 103 },
-	{ VK_LSHIFT, 30 },
-	{ VK_RSHIFT, 46 },
-	{ VK_CONTROL, 14 },    /* either Ctrl key */
-	{ VK_LMENU, 116 },     /* READ, left Alt */
-	{ VK_RMENU, 67 },      /* FUNCTION, right Alt */
-	{ VK_F1, 126 },        /* HELP */
-	{ VK_F2, 78 },         /* REPEAT */
-	{ VK_F3, 93 },         /* MENU */
+	{ 0x1e, 28 }, /* A */ { 0x30, 73 }, /* B */ { 0x2e, 75 }, /* C */ { 0x20, 26 }, /* D */
+	{ 0x12, 43 }, /* E */ { 0x21, 25 }, /* F */ { 0x22, 24 }, /* G */ { 0x23, 23 }, /* H */
+	{ 0x17, 38 }, /* I */ { 0x24, 22 }, /* J */ { 0x25, 21 }, /* K */ { 0x26, 20 }, /* L */
+	{ 0x32, 71 }, /* M */ { 0x31, 72 }, /* N */ { 0x18, 37 }, /* O */ { 0x19, 36 }, /* P */
+	{ 0x10, 45 }, /* Q */ { 0x13, 42 }, /* R */ { 0x1f, 27 }, /* S */ { 0x14, 41 }, /* T */
+	{ 0x16, 39 }, /* U */ { 0x2f, 74 }, /* V */ { 0x11, 44 }, /* W */ { 0x2d, 76 }, /* X */
+	{ 0x15, 40 }, /* Y */ { 0x2c, 77 }, /* Z */
+	{ 0x02, 61 }, /* 1 */ { 0x03, 60 }, /* 2 */ { 0x04, 59 }, /* 3 */ { 0x05, 58 }, /* 4 */
+	{ 0x06, 57 }, /* 5 */ { 0x07, 56 }, /* 6 */ { 0x08, 55 }, /* 7 */ { 0x09, 54 }, /* 8 */
+	{ 0x0a, 53 }, /* 9 */ { 0x0b, 52 }, /* 0 */
+	{ 0x0c, 51 },              /* - */
+	{ 0x0d, 35 },              /* = */
+	{ 0x1a, 87 },              /* [ */
+	{ 0x1b, 86 },              /* ] */
+	{ 0x2b, 85 },              /* backslash */
+	{ 0x27, 19 },              /* ; */
+	{ 0x28, 84 },              /* ' */
+	{ 0x33, 70 },              /* , */
+	{ 0x34, 69 },              /* . */
+	{ 0x35, 68 },              /* / */
+	{ 0x29, 120 },             /* `, the bottom row single quote */
+	{ SCAN_ESCAPE, 62 },
+	{ SCAN_TAB, 122 },
+	{ SCAN_RETURN, 83 },
+	{ SCAN_NUMPAD_ENTER, 83 },
+	{ SCAN_BACK, 99 },
+	{ SCAN_DELETE, 119 },
+	{ SCAN_SPACE, 125 },
+	{ SCAN_UP, 100 },
+	{ SCAN_RIGHT, 101 },
+	{ SCAN_DOWN, 102 },
+	{ SCAN_LEFT, 103 },
+	{ SCAN_LSHIFT, 30 },
+	{ SCAN_RSHIFT, 46 },
+	{ SCAN_CONTROL, 14 },
+	{ SCAN_RCONTROL, 14 },
+	{ SCAN_ALT, 116 },         /* READ, left Alt */
+	{ SCAN_RALT, 67 },         /* FUNCTION, right Alt */
+	{ SCAN_F1, 126 },          /* HELP */
+	{ SCAN_F2, 78 },           /* REPEAT */
+	{ SCAN_F3, 93 },           /* MENU */
 };
 
 static const KeyMapping *key_map = braille_map;
@@ -120,12 +154,12 @@ static BOOL held[KEY_COUNT];
 static BOOL power_off;
 static HWND label;
 
-static int find_code(WPARAM virtual_key)
+static int find_code(WORD key)
 {
 	size_t i;
 
 	for (i = 0; i < key_count; i++) {
-		if (key_map[i].virtual_key == virtual_key) {
+		if (key_map[i].key == key) {
 			return key_map[i].code;
 		}
 	}
@@ -172,25 +206,25 @@ static void show_error(HWND owner, const char *text)
 	MessageBoxA(owner, text, window_title(), MB_OK | MB_ICONERROR);
 }
 
-static void handle_key(HWND window, WPARAM virtual_key, BOOL down)
+static void handle_key(HWND window, WORD key, BOOL down)
 {
 	int code;
 	int sent;
 
-	if (virtual_key == VK_ESCAPE && !qt) {
+	if (key == SCAN_ESCAPE && !qt) {
 		DestroyWindow(window);
 		return;
 	}
-	code = find_code(virtual_key);
-	if ((code < 0 && virtual_key != POWER_SWITCH_KEY) || virtual_key >= KEY_COUNT) {
+	code = find_code(key);
+	if (code < 0 && key != POWER_SWITCH_KEY) {
 		return;
 	}
 	/* Held keys repeat their key-down event; send only the first one. */
-	if (down == held[virtual_key]) {
+	if (down == held[key]) {
 		return;
 	}
-	held[virtual_key] = down;
-	if (virtual_key == POWER_SWITCH_KEY) {
+	held[key] = down;
+	if (key == POWER_SWITCH_KEY) {
 		if (!down) {
 			return;
 		}
@@ -211,28 +245,22 @@ static void release_held_keys(HWND window)
 	size_t i;
 
 	for (i = 0; i < key_count; i++) {
-		if (held[key_map[i].virtual_key]) {
-			handle_key(window, key_map[i].virtual_key, FALSE);
+		if (held[key_map[i].key]) {
+			handle_key(window, key_map[i].key, FALSE);
 		}
 	}
 }
 
-/*
- * Windows reports both Shift keys as VK_SHIFT and both Alt keys as VK_MENU.
- * In QT mode, the left and right keys are different QT keys.
- */
-static WPARAM key_side(WPARAM virtual_key, LPARAM lparam)
+/* Programs that send keys, such as some screen readers, can leave out the scan code. */
+static WORD key_from_message(WPARAM virtual_key, LPARAM lparam)
 {
-	if (!qt) {
-		return virtual_key;
+	UINT scan_code = (lparam >> 16) & 0xff;
+
+	if (scan_code == 0) {
+		scan_code = MapVirtualKeyA((UINT)virtual_key, MAPVK_VK_TO_VSC_EX);
+		return (scan_code & 0xff) | ((scan_code & 0xff00) ? EXTENDED : 0);
 	}
-	if (virtual_key == VK_SHIFT) {
-		return MapVirtualKeyA((lparam >> 16) & 0xff, MAPVK_VSC_TO_VK_EX);
-	}
-	if (virtual_key == VK_MENU) {
-		return (lparam & EXTENDED_KEY_FLAG) ? VK_RMENU : VK_LMENU;
-	}
-	return virtual_key;
+	return scan_code | ((lparam & EXTENDED_KEY_FLAG) ? EXTENDED : 0);
 }
 
 static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -249,13 +277,13 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 	/* Keys pressed while Alt is down come as system keys. */
 	case WM_SYSKEYDOWN:
 	case WM_SYSKEYUP:
-		if (find_code(key_side(wparam, lparam)) < 0) {
+		if (find_code(key_from_message(wparam, lparam)) < 0) {
 			break;
 		}
 		/* fall through */
 	case WM_KEYDOWN:
 	case WM_KEYUP:
-		handle_key(window, key_side(wparam, lparam), message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
+		handle_key(window, key_from_message(wparam, lparam), message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
 		return 0;
 	case WM_KILLFOCUS:
 		release_held_keys(window);
