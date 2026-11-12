@@ -39,6 +39,8 @@ You will need:
   * `KeySoft 9 5 0 Build 1280.hwi`, from HumanWare's support site on the [Internet Archive](https://web.archive.org/web/20210510082627/https://support.humanware.com/en-international/support/braillenote_apex/software/keysoft_95). This file belongs to HumanWare.
   * `KeySoft 9 5 1 Build 1285.hwi`, if you have it. As far as I know, no public copy exists.
 
+Jake Gross maintains a [BrailleNote Archive](https://datajake.braillescreen.net/VariousAT/BrailleNoteFiles/BrailleNoteArchive.7z) with files for the BrailleNote Apex and the classic and PK models of the BrailleNote mPower, going back to KeySoft 901 and KeySoft 7. You can get the `.hwi` file there too. I don't endorse these files. Always check the hash below to make sure you have a legitimate file.
+
 To make sure you have the right file, compare its SHA-256 hash. In PowerShell, run `Get-FileHash` on the file.
 
 | File | SHA-256 |
